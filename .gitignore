@@ -1,11 +1,6 @@
 # Data
 /data/
 
-/aid_pais_knowledgegraph/downloaded_pdfs/
-/aid_pais_knowledgegraph/processed_jsons/
-
-/aid_pais_knowledgegraph/SymptomData/processed_symptoms/raw_jsonld
-
 # Mac OS-specific storage files
 .DS_Store
 
