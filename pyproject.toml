@@ -1,7 +1,7 @@
 [project]
-name = "pyeuropepmc"
-version = "1.0.0"
-description = "A Python package for working with the Europe PMC API to search and retrieve scientific literature."
+name = "italianollama"
+version = "0.1.0"
+description = "Lightweight Italian learning assistant backed by a local Ollama LLM."
 license = "file:LICENSE"
 readme = "README.md"
 authors = [
@@ -10,11 +10,11 @@ authors = [
 requires-python = ">=3.10,<4.0"
 
 [tool.poetry.urls]
-"Homepage" = "https://github.com/JonasHeinickeBio/pyEuropePMC"
-"Bug Tracker" = "https://github.com/JonasHeinickeBio/pyEuropePMC/issues"
+"Homepage" = "https://github.com/JonasHeinickeBio/ItalianOllama"
+"Bug Tracker" = "https://github.com/JonasHeinickeBio/ItalianOllama/issues"
 
 [tool.semantic_release]
-version_variable = ["src/pyeuropepmc/__init__.py:__version__"]
+version_variable = ["src/italianollama/__init__.py:__version__"]
 version_toml = ["pyproject.toml:project.version"]
 branch = "main"
 upload_to_pypi = true
@@ -22,6 +22,7 @@ upload_to_release = true
 build_command = "pip install poetry && poetry build"
 commit_author = "Jonas Heinicke (HZI) <jonas.heinicke@helmholtz-hzi.de>"
 
+# (keep dependencies as-is but project will focus on local Ollama usage)
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 ipython = ">=7.30"
@@ -114,7 +115,7 @@ ignore = ["E203", "E266", "E731"]
 max-complexity = 10
 
 [tool.ruff.lint.isort]
-known-first-party = ["pyeuropepmc"]
+known-first-party = ["italianollama"]
 force-sort-within-sections = true
 
 [tool.black]
@@ -144,7 +145,7 @@ docstring-quotes = "double"
 
 [tool.coverage.run]
 branch = true
-source = ["pyeuropepmc"]
+source = ["italianollama"]
 
 [tool.coverage.report]
 show_missing = true
