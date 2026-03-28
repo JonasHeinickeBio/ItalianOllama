@@ -1,0 +1,124 @@
+# ============================================
+# Docker Compose Profiles - Quick Reference
+# ============================================
+
+# Profile: local
+# - Neo4j (local Docker container)
+# - Ollama (local Docker container)
+# - OpenWebUI (optional)
+# - Language Learning API
+#
+# Use when: You want everything running locally
+# Command: docker compose --profile local up -d
+
+# --------------------------------------------------------
+# Profile: aura (RECOMMENDED for cloud)
+# - Neo4j Aura (cloud - no local container!)
+# - Ollama (local Docker container)
+# - OpenWebUI (optional)
+# - Language Learning API
+#
+# Use when: You want managed Neo4j but local Ollama
+# Command: docker compose --profile aura up -d
+#
+# Prerequisites:
+#   - Create secrets/neo4j_aura_uri.txt
+#   - Create secrets/neo4j_aura_username.txt  
+#   - Create secrets/neo4j_aura_password.txt
+
+# --------------------------------------------------------
+# Profile: minimal (NO Neo4j container)
+# - Ollama (local Docker container)
+# - Language Learning API only
+#
+# Use when: You want the lightest setup
+# Command: docker compose --profile minimal up -d
+
+# --------------------------------------------------------
+# Profile: no-ollama (Use external LLM)
+# - Neo4j Aura or local (based on other settings)
+# - NO Ollama container (use external API)
+# - Language Learning API
+#
+# Use when: You want to use Blablador, OpenAI, or Ollama on host
+# Command: 
+#   docker compose up -d  # Don't start ollama
+#   # Set environment variables for your LLM provider
+#
+# Environment variables to set:
+#   # For Blablador:
+#   AISUITE_PROVIDER=blablador
+#   BLABLADOR_API_URL=https://...  
+#   BLABLADOR_API_KEY=...
+#
+#   # For Ollama on host (Linux):
+#   OLLAMA_BASE_URL=http://host.docker.internal:11434
+#
+#   # For Ollama on host (Mac):
+#   OLLAMA_BASE_URL=http://localhost:11434
+
+# --------------------------------------------------------
+# Profile: webui (Full stack with UI)
+# - Neo4j (local or Aura)
+# - Ollama
+# - OpenWebUI (http://localhost:8080)
+# - Language Learning API
+#
+# Use when: You want the web interface
+# Command: docker compose --profile webui up -d
+
+# ============================================
+# Common Combinations
+# ============================================
+
+# 1. Neo4j Aura + Ollama (local)
+#    docker compose --profile aura up -d
+
+# 2. Neo4j Aura + Blablador (no Ollama container)
+#    docker compose --profile aura up -d (set BLABLADOR_* env vars)
+
+# 3. Local Neo4j + Ollama
+#    docker compose --profile local up -d
+
+# 4. Minimal (API + external LLM only)
+#    docker compose up -d --no-attach ollama --no-attach neo4j
+
+# 5. Just the API (connect to everything externally)
+#    docker compose up -d language-learning-service
+
+# ============================================
+# Environment Variable Quick Reference
+# ============================================
+#
+# # Neo4j (Aura)
+# NEO4J_URI=neo4j+s://...databases.neo4j.io
+# NEO4J_USER=...
+# NEO4J_PASSWORD=...
+# USE_AURA=true
+#
+# # Neo4j (Local)
+# NEO4J_URI=bolt://neo4j:7687
+# NEO4J_USER=neo4j
+# USE_AURA=false
+#
+# # LLM - Ollama (local container)
+# AISUITE_PROVIDER=ollama
+# OLLAMA_BASE_URL=http://ollama:11434
+# OLLAMA_MODEL=llama3.2
+#
+# # LLM - Ollama (on host)
+# OLLAMA_BASE_URL=http://host.docker.internal:11434  # Linux
+# OLLAMA_BASE_URL=http://localhost:11434  # Mac/Windows
+#
+# # LLM - Blablador
+# AISUITE_PROVIDER=blablador
+# BLABLADOR_API_URL=https://...
+# BLABLADOR_API_KEY=...
+#
+# # LLM - OpenAI
+# AISUITE_PROVIDER=openai
+# OPENAI_API_KEY=...
+#
+# # LLM - Anthropic
+# AISUITE_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=...

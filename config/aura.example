@@ -1,0 +1,45 @@
+"# Neo4j Aura Configuration (Cloud)
+# Use this as a template to connect to Neo4j Aura instead of local Docker container
+# 
+# Usage: 
+#   1. Copy your Aura credentials to secrets/neo4j_aura_*.txt
+#   2. Use profile: aura when running docker-compose
+#
+# Wait 60 seconds after instance creation before connecting!
+
+# ============================================
+# Option 1: Neo4j Aura (Cloud) - No Docker Container
+# ============================================
+# Profile: aura
+# Set these environment variables or secrets:
+
+# NEO4J_URI=neo4j+s://YOUR_INSTANCE.databases.neo4j.io
+# NEO4J_USER=YOUR_USERNAME  
+# NEO4J_PASSWORD=YOUR_PASSWORD
+# NEO4J_DATABASE=neo4j
+# USE_AURA=true
+
+# ============================================
+# Option 2: Neo4j Local (Docker)
+# ============================================
+# Profile: local
+# Uses docker-compose.yml with neo4j container
+
+# NEO4J_URI=bolt://neo4j:7687
+# NEO4J_USER=neo4j
+# NEO4J_PASSWORD=your_password_here
+# NEO4J_DATABASE=neo4j
+# USE_AURA=false
+
+# ============================================
+# Docker Compose Commands
+# ============================================
+# Use Aura (cloud Neo4j, no local container):
+#   docker compose --profile aura up -d
+
+# Use Local Neo4j (Docker container):
+#   docker compose --profile local up -d
+
+# Minimal (API + Ollama only):
+#   docker compose --profile minimal up -d
+# ============================================
