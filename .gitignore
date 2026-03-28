@@ -180,3 +180,14 @@ htmlcov/
 junit.xml
 .benchmarks/
 MODULAR_BENCHMARK_RESULTS.json
+.continue/agents/new-config.yaml
+
+# Docker
+secrets/
+data/
+logs/
+
+# Keep these docker files in version control
+!docker-compose.yml
+!Dockerfile*
+!config/
