@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import json
 import logging
-from typing import list
 
 logger = logging.getLogger(__name__)
 
