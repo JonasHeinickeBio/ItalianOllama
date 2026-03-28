@@ -183,3 +183,4 @@ logs/
 !docker-compose.yml
 !Dockerfile*
 !config/
+reports/model_availability_report_*.txt
