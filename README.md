@@ -1,173 +1,133 @@
-# ItalianOllama — Local Italian learning assistant
+# ItalianOllama 🤖🇮🇹
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+LLM-powered Italian language learning workflow using hellmholtz, Neo4j, and OpenWebUI.
 
-ItalianOllama is a lightweight Python scaffold for building an Italian language learning assistant powered by a local Ollama LLM.
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](docker-compose.yml)
 
-## Key goals
+## Features
 
-- Prompt templates for grammar, vocabulary and writing practice
-- Automatic corrections with explanations and short practice items
-- Simple storage for saving vocabulary and corrected texts for later revision
-- Room to prototype spoken interaction (speech-to-text and text-to-speech)
+- **AI Language Tutor** - Conversational Italian learning with adaptive difficulty (beginner/intermediate/advanced)
+- **Knowledge Graph** - Neo4j-powered persistent vocabulary storage and learning history
+- **Multi-Provider LLM** - Blablador (Helmholtz), Ollama, OpenAI, Anthropic support
+- **Web Interface** - User-friendly chat UI via OpenWebUI
+- **Vocabulary & Grammar** - Topic-based organization with related word suggestions
+- **Session Tracking** - Track learning progress across sessions
 
-## Quickstart (macOS / zsh)
-
-1. Create and activate a virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-2. Install dependencies:
+## Quick Start
 
 ```bash
-pip install -r requirements.txt
+# 1. Create secrets directory
+mkdir -p secrets
+
+# 2. Generate secure passwords
+openssl rand -base64 32 > secrets/neo4j_password.txt
+openssl rand -base64 32 > secrets/webui_secret_key.txt
+
+# 3. Configure environment
+cp config.env.example .env
+# Edit .env with your BLABLADOR_API_KEY and other settings
+
+# 4. Start all services
+docker compose up -d
+
+# 5. Verify services
+docker compose ps
+curl http://localhost:8000/health
 ```
 
-3. Ensure Ollama is installed and a local model is available. The scaffold will try the Ollama HTTP API at `http://127.0.0.1:11434` and fall back to the `ollama` CLI if needed.
+### Access Points
 
-4. Try the CLI (replace `local-model` with your model name):
+| Service | Port | URL |
+|---------|------|-----|
+| OpenWebUI | 8080 | http://localhost:8080 |
+| API | 8000 | http://localhost:8000 |
+| Neo4j Browser | 7474 | http://localhost:7474 |
+| Neo4j Bolt | 7687 | bolt://localhost:7687 |
+| Ollama | 11434 | http://localhost:11434 |
+
+## Environment Variables
+
+### Required
 
 ```bash
-python -m italianollama.app run --task grammar_explain --input "Mi chiamo Jonas e io essere felice" --model local-model
+BLABLADOR_API_KEY=your_api_key
+BLABLADOR_API_BASE=https://api.helmholtz-blablador.fz-juelich.de/v1/
+BLABLADOR_MODEL=alias-fast
+NEO4J_PASSWORD=your_secure_password
 ```
 
-## Repository layout
+### Optional
 
-- `src/italianollama/` — package code: prompt templates, `OllamaClient`, storage, CLI
-- `requirements.txt` — suggested Python dependencies
-- `tests/` — small smoke tests and unit tests
-- `.github/ISSUE_TEMPLATE/`, `issues/` — templates and initial project issues
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_MODEL` | `llama3.2` | Ollama model |
+| `TARGET_LANGUAGE` | `italian` | Learning language |
+| `DIFFICULTY_LEVEL` | `intermediate` | Difficulty level |
+| `API_PORT` | `8000` | API port |
 
-## Development notes
+## Architecture
 
-- Update `src/italianollama/prompts.py` to tune prompts and task templates.
-- `src/italianollama/storage.py` provides a simple SQLite-backed save/list API for study items.
-- Consider adding a small FastAPI UI or TUI for interactive practice sessions.
+```
+┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
+│  OpenWebUI   │────►│  Language API   │────►│  LLM Clients │
+│  (Port 8080) │     │  (Port 8000)    │     │  (hellmholtz)│
+└──────────────┘     └────────┬────────┘     └──────┬───────┘
+                              │                     │
+                              ▼                     ▼
+                      ┌───────────────┐     ┌───────────────┐
+                      │   Neo4j       │     │  Blablador    │
+                      │ (Knowledge    │     │  Ollama       │
+                      │    Graph)     │     │  OpenAI       │
+                      └───────────────┘     │  Anthropic    │
+                                            └───────────────┘
+```
 
-## Contributing
+**Components:**
+- **Language API** - FastAPI endpoints for chat, vocabulary, sessions
+- **Tutor Agent** - AI-powered learning with context management
+- **Memory Graph** - Neo4j knowledge graph for vocabulary/grammar storage
 
-- Create a feature branch from `main`, open a PR, and add tests for new behavior.
+## Project Structure
+
+```
+ItalianOllama/
+├── src/italianollama/      # Main application
+│   ├── api/                # FastAPI endpoints
+│   ├── agents/             # Language tutor agent
+│   ├── llm/                # LLM client wrapper
+│   └── memory/             # Neo4j knowledge graph
+├── config/                 # Configuration files
+├── docs/                   # Documentation
+├── docker-compose.yml      # Docker orchestration
+└── pyproject.toml          # Python dependencies
+```
+
+## Development Setup
+
+```bash
+# Clone and setup
+git clone https://github.com/JonasHeinickeBio/ItalianOllama.git
+cd ItalianOllama
+git checkout feature/llm-language-learning-workflow
+
+# Install dependencies
+poetry install
+poetry shell
+
+# Run tests
+poetry run pytest
+```
+
+## Documentation
+
+- [Installation](docs/installation.md) - Detailed setup guide
+- [Architecture](docs/architecture.md) - System design
+- [Configuration](docs/configuration.md) - All config options
+- [API Reference](docs/api.md) - REST endpoints
+- [Model Management](docs/models.md) - Available models
+- [Troubleshooting](docs/troubleshooting.md) - Common issues
 
 ## License
 
-- MIT — see `LICENSE` for details.
-
-## Next steps I can help with
-
-- Add a short example notebook demonstrating typical flows
-- Implement a minimal FastAPI server for interactive practice
-- Create CI workflow(s) that run tests and linting for PRs
-
-If you want any of the above, tell me which and I'll implement it on `cleanup-scaffold` or a dedicated feature branch.
-# PyEuropePMC
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-200%2B%20passed-green.svg)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-90%2B%25-brightgreen.svg)](htmlcov/)
-
-
-**PyEuropePMC** is a robust Python toolkit for automated search, extraction, and analysis of scientific literature from [Europe PMC](https://europepmc.org/).
-
-## ✨ Key Features
-
-
-- 🔍 **Comprehensive Search API** - Query Europe PMC with advanced search options
-- 📄 **Full-Text Retrieval** - Download PDFs, XML, and HTML content from open access articles
-- 📊 **Multiple Output Formats** - JSON, XML, Dublin Core (DC)
-- 📦 **Bulk FTP Downloads** - Efficient bulk PDF downloads from Europe PMC FTP servers
-- 🔄 **Smart Pagination** - Automatic handling of large result sets
-- 🛡️ **Robust Error Handling** - Built-in retry logic and connection management
-- 🧑‍💻 **Type Safety** - Extensive use of type annotations and validation
-- ⚡ **Rate Limiting** - Respectful API usage with configurable delays
-- 🧪 **Extensively Tested** - 200+ tests with 90%+ code coverage
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-pip install pyeuropepmc
-````markdown
-# ItalianOllama — Local Italian learning assistant
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-Lightweight Python scaffold for an Italian language learning app that uses a local Ollama LLM.
-
-Goals:
-- Provide prompt templates for grammar, vocabulary, and writing tasks.
-- Produce corrections and explanations for learner input.
-- Save important facts (vocabulary, grammar points, corrected texts) for later revision.
-- Explore future spoken interaction features.
-
-Requirements
-- Python 3.10+
-- Ollama installed and a local model available (see https://ollama.ai)
-- (Optional) Create a Python virtualenv
-
-Quick start
-
-1. Create and activate virtualenv (macOS zsh):
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-# ItalianOllama — Local Italian learning assistant
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-Lightweight Python scaffold for an Italian language learning app that uses a local Ollama LLM.
-
-Goals
-- Provide prompt templates for grammar, vocabulary, and writing tasks.
-- Produce corrections and explanations for learner input.
-- Save important facts (vocabulary, grammar points, corrected texts) for later revision.
-- Explore future spoken interaction features.
-
-Requirements
-- Python 3.10+
-- Ollama installed and a local model available (see https://ollama.ai)
-
-Quick start
-
-1. Create and activate a virtualenv (macOS zsh):
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-2. Ensure Ollama is installed and a local model is available. This scaffold uses a small wrapper that tries HTTP at `http://127.0.0.1:11434` and falls back to the `ollama` CLI.
-
-3. Run the CLI app to try a sample prompt:
-
-```bash
-python -m italianollama.app run --task grammar_explain --input "Mi chiamo Jonas e io essere felice" --model local-model
-```
-
-What this repo contains
-- `src/italianollama/` — the package with prompt templates, an Ollama client wrapper, storage, and a small CLI
-- `requirements.txt` — recommended runtime deps
-- `tests/` — minimal tests for the scaffold
-- `.github/ISSUE_TEMPLATE/` + `issues/` — templates and initial issues to track features
-
-Development notes
-- Replace `local-model` with your Ollama model name.
-- Tune or extend prompt templates in `src/italianollama/prompts.py`.
-- To prototype speech I/O, add a new feature branch (I can help wire Whisper/VOSK later).
-
-Contributing
-- Create feature branches off `main` and open PRs. CI checks (if any) will run on PRs.
-
-License
-- MIT — see `LICENSE` for details.
-
-```
+MIT License - See [LICENSE](LICENSE) for details.
