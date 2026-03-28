@@ -36,6 +36,7 @@ rdflib-jsonld = ">=0.5"
 rdflib = ">=6.0"
 python-dotenv = ">=0.19"
 typer = ">=0.12.5,<0.16.0"
+click = ">=8.1.0"
 fastapi = "^0.115.0"
 uvicorn = { extras = ["standard"], version = "^0.32.0" }
 neo4j = "^5.26.0"
