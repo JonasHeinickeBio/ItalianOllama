@@ -146,22 +146,49 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
     # ============ Add Nodes ============
 
     # Router - entry point
-    workflow.add_node("router", router_node)
+    async def router_wrapper(state: TutorState):
+        return await router_node(state)
+
+    workflow.add_node("router", router_wrapper)
 
     # Chat (default free conversation)
-    workflow.add_node("chat", lambda state: chat_node(state, neo4j_client))
+    async def chat_wrapper(state: TutorState):
+        return await chat_node(state, neo4j_client)
+
+    workflow.add_node("chat", chat_wrapper)
 
     # Phase 2: Placement test
-    workflow.add_node("placement", lambda state: placement_node(state, neo4j_client))
+    async def placement_wrapper(state: TutorState):
+        return await placement_node(state, neo4j_client)
+
+    workflow.add_node("placement", placement_wrapper)
 
     # Phase 3: Exercise nodes
-    workflow.add_node("grammar", lambda state: grammar_node(state, neo4j_client))
-    workflow.add_node("vocabulary", lambda state: vocabulary_node(state, neo4j_client))
-    workflow.add_node("translation", lambda state: translation_node(state, neo4j_client))
-    workflow.add_node("free_writing", lambda state: free_writing_node(state, neo4j_client))
+    async def grammar_wrapper(state: TutorState):
+        return await grammar_node(state, neo4j_client)
+
+    workflow.add_node("grammar", grammar_wrapper)
+
+    async def vocabulary_wrapper(state: TutorState):
+        return await vocabulary_node(state, neo4j_client)
+
+    workflow.add_node("vocabulary", vocabulary_wrapper)
+
+    async def translation_wrapper(state: TutorState):
+        return await translation_node(state, neo4j_client)
+
+    workflow.add_node("translation", translation_wrapper)
+
+    async def free_writing_wrapper(state: TutorState):
+        return await free_writing_node(state, neo4j_client)
+
+    workflow.add_node("free_writing", free_writing_wrapper)
 
     # Phase 4: Niveau test (exam preparation)
-    workflow.add_node("niveau_test", lambda state: niveau_test_node(state, neo4j_client))
+    async def niveau_test_wrapper(state: TutorState):
+        return await niveau_test_node(state, neo4j_client)
+
+    workflow.add_node("niveau_test", niveau_test_wrapper)
 
     # ============ Define Edges ============
 
