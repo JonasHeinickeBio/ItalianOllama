@@ -1,0 +1,1 @@
+"""Sofia Chainlit frontend package."""
