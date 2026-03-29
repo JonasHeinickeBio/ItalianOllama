@@ -1,0 +1,336 @@
+# Italian Tutor - Docker Compose (Production-Ready, Secure)
+#
+# Enterprise-grade setup with:
+#   ✓ Secrets management for sensitive data
+#   ✓ Resource limits and container security
+#   ✓ Health checks and service dependencies
+#   ✓ Logging configuration
+#   ✓ Network isolation
+#   ✓ Specific container versions (no 'latest')
+#
+# Quick Start:
+#   1. Create secrets: bash scripts/generate_secrets.sh
+#   2. docker compose up -d
+#   3. Access: http://localhost:3000 (WebUI) or http://localhost:8000/docs (API)
+#
+# Profiles:
+#   docker compose --profile neo4j up -d      # Include local Neo4j
+#   docker compose up -d                      # Default (cloud Neo4j only)
+
+version: '3.9'
+
+services:
+  # ============================================
+  # FastAPI Backend - Core API
+  # ============================================
+  fastapi:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: italian-tutor-api
+
+    # Security: Run as non-root user
+    user: "1000:1000"
+
+    environment:
+      # Core Configuration
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Neo4j
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - USE_AURA=${USE_AURA:-false}
+
+      # LiteLLM Router
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_MODEL=${LITELLM_MODEL:-gpt-4}
+
+      # Security
+      - CORS_ORIGINS=${CORS_ORIGINS:-"http://localhost:3000,http://localhost:8000"}
+
+    env_file:
+      - ../.env
+
+    # Secrets for sensitive data
+    secrets:
+      - neo4j_password
+      - auth_secret_key
+      - litellm_api_key
+
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+    depends_on:
+      litellm:
+        condition: service_healthy
+
+    restart: on-failure:3
+
+    # Resource Limits & Reservations
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+    networks:
+      - italian-tutor-network
+
+    # Centralized Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=fastapi"
+
+  # ============================================
+  # LiteLLM - LLM Router & Load Balancer
+  # ============================================
+  litellm:
+    image: ghcr.io/berriai/litellm:0.30.5-main
+    container_name: italian-tutor-litellm
+
+    user: "1000:1000"
+
+    volumes:
+      - ./litellm/litellm_config.yaml:/app/config.yaml:ro
+      - litellm-db:/data
+
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+
+    environment:
+      - LITELLM_CONFIG_FILE=/app/config.yaml
+      - DATABASE_URL=sqlite:////data/litellm.db
+      - LITELLM_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+    env_file:
+      - ../.env
+
+    secrets:
+      - litellm_api_key
+      - litellm_salt_key
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    restart: on-failure:3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+    networks:
+      - italian-tutor-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=litellm"
+
+  # ============================================
+  # Neo4j - Graph Database (Optional, Local)
+  # ============================================
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: italian-tutor-neo4j
+    profiles: ["neo4j"]
+
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_dbms_memory_heap_max__size=1G
+      - NEO4J_dbms_memory_pagecache_size=512M
+      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_server_logs_debug_enabled=false
+
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+
+    ports:
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+
+    secrets:
+      - neo4j_password
+
+    restart: on-failure:3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+    networks:
+      - italian-tutor-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=neo4j"
+
+  # ============================================
+  # OpenWebUI - Web Interface
+  # ============================================
+  # ============================================
+  # OpenWebUI - Web Interface
+  # ============================================
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:0.1.108
+    container_name: italian-tutor-webui
+
+    user: "1000:1000"
+
+    volumes:
+      - openwebui-data:/app/backend/data
+
+    environment:
+      # API Configuration
+      - OPENAI_API_BASE_URL=http://fastapi:8000/v1
+      - DEFAULT_MODELS=${DEFAULT_MODELS:-gpt-4}
+
+      # Security Settings
+      - ENABLE_SIGNUP=false
+      - ENABLE_API_KEY_AUTH=true
+      - TRUSTED_SERVER_URLS=http://fastapi:8000
+      - WEBUI_SESSION_COOKIE_SECURE=true
+      - WEBUI_SESSION_COOKIE_SAMESITE=Lax
+
+      # Localization
+      - DEFAULT_LOCALE=it
+      - DEFAULT_LANGUAGE=it
+      - PYTHONUNBUFFERED=1
+
+    env_file:
+      - ../.env
+
+    secrets:
+      - webui_secret_key
+
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+
+    depends_on:
+      fastapi:
+        condition: service_healthy
+
+    restart: on-failure:3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+    networks:
+      - italian-tutor-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=openwebui"
+
+# ============================================
+# Volumes - Data Persistence
+# ============================================
+volumes:
+  neo4j-data:
+    driver: local
+  neo4j-logs:
+    driver: local
+  litellm-db:
+    driver: local
+  openwebui-data:
+    driver: local
+
+# ============================================
+# Networks - Service Communication
+# ============================================
+networks:
+  italian-tutor-network:
+    driver: bridge
+    name: italian-tutor-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================
+# Secrets - Sensitive Data Management
+# ============================================
+# Docker Secrets for production deployment
+# Local development: Create files in ../secrets/
+#
+# Required secret files:
+#   - ../secrets/neo4j_password.txt
+#   - ../secrets/auth_secret_key.txt
+#   - ../secrets/litellm_api_key.txt
+#   - ../secrets/litellm_salt_key.txt
+#   - ../secrets/webui_secret_key.txt
+#
+secrets:
+  neo4j_password:
+    file: ../secrets/neo4j_password.txt
+  auth_secret_key:
+    file: ../secrets/auth_secret_key.txt
+  litellm_api_key:
+    file: ../secrets/litellm_api_key.txt
+  litellm_salt_key:
+    file: ../secrets/litellm_salt_key.txt
+  webui_secret_key:
+    file: ../secrets/webui_secret_key.txt
