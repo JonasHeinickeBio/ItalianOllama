@@ -101,9 +101,15 @@ async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorS
             except Exception:
                 pass  # Non-critical if error analysis fails
 
-    except Exception as e:
-        state["response"] = f"Mi dispiace, errore nell'esercizio di grammatica: {str(e)}"
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Grammar node exception: {type(e).__name__}: {e}", exc_info=True)
+        state["response"] = (
+            "Mi dispiace, errore nell'esercizio di grammatica. Per favore, riprova."
+        )
 
     state["exercise_state"] = exercise_state
-    state["should_continue"] = True
+    state["request_done"] = state.get("single_request", False)
+    state["should_continue"] = not state.get("request_done", False)
     return state

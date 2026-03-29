@@ -90,9 +90,13 @@ async def free_writing_node(state: TutorState, neo4j_client) -> TutorState:
             except Exception:
                 pass  # Non-critical
 
-    except Exception as e:
-        state["response"] = f"Mi dispiace, errore nell'esercizio di scrittura: {str(e)}"
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Free writing node exception: {type(e).__name__}: {e}", exc_info=True)
+        state["response"] = "Mi dispiace, errore nell'esercizio di scrittura. Per favore, riprova."
 
     state["exercise_state"] = exercise_state
-    state["should_continue"] = True
+    state["request_done"] = state.get("single_request", False)
+    state["should_continue"] = not state.get("request_done", False)
     return state

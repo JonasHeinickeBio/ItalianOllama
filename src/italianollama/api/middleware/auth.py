@@ -123,9 +123,6 @@ async def require_api_key(
 
     api_key = credentials.credentials
 
-    # TODO: Implement API key validation against a key store
-    # For now, just accept any non-empty key
-    if not api_key:
-        raise AuthenticationError("Invalid API key")
-
-    return api_key
+    # TODO: Implement real API key validation against a key store
+    # Currently fails-closed: no validation logic implemented yet
+    raise AuthenticationError("API key validation not implemented")

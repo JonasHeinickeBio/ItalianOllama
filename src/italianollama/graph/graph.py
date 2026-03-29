@@ -105,6 +105,9 @@ async def chat_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorStat
     Free chat with Sofia persona for general conversation.
     This is the default node when no specific exercise is requested.
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
     llm = LLMClient()
     messages = state.get("messages", [])
 
@@ -113,9 +116,13 @@ async def chat_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorStat
         state["messages"] = messages + [{"role": "assistant", "content": response}]
         state["response"] = response
     except Exception as e:
-        state["response"] = f"Ciao! {str(e)}"
+        # Log full exception internally, return generic message to user
+        logger.error(f"Chat node exception: {type(e).__name__}: {e}", exc_info=True)
+        state["response"] = "Mi scusi, ho avuto un problema. Per favore, riprova."
 
-    state["should_continue"] = True
+    # Mark request as complete for single-request flows
+    state["request_done"] = state.get("single_request", False)
+    state["should_continue"] = not state.get("request_done", False)
     return state
 
 
@@ -190,6 +197,13 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
 
     workflow.add_node("niveau_test", niveau_test_wrapper)
 
+    # Terminal node - end of conversation
+    async def end_node(state: TutorState) -> TutorState:
+        """Terminal node - workflow exits here for single-request flows."""
+        return state
+
+    workflow.add_node("end", end_node)
+
     # ============ Define Edges ============
 
     # Start at router
@@ -210,7 +224,18 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
         },
     )
 
-    # All exercise nodes lead back to router for continued conversation
+    # Helper function: route to end or back to router based on request_done flag
+    def route_after_exercise(state: TutorState) -> str:
+        """Determine if workflow should terminate or continue.
+
+        Routes to 'end' terminal node if request_done is True (single-request mode),
+        otherwise routes back to 'router' for continued conversation.
+        """
+        if state.get("request_done", False):
+            return "end"
+        return "router"
+
+    # All exercise nodes route based on request_done flag
     for node in [
         "placement",
         "grammar",
@@ -220,7 +245,14 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
         "niveau_test",
         "chat",
     ]:
-        workflow.add_edge(node, "router")
+        workflow.add_conditional_edges(
+            node,
+            route_after_exercise,
+            {"end": "end", "router": "router"},
+        )
+
+    # Terminal edge - workflow halts
+    workflow.add_edge("end", None)
 
     # Compile the graph
     return workflow.compile()

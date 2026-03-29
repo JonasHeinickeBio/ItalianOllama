@@ -39,7 +39,7 @@ COPY src /app/src
 ENV PATH=/home/apiuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app/src
 
 # Switch to non-root user
 USER apiuser

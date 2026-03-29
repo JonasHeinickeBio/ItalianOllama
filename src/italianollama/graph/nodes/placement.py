@@ -100,7 +100,14 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
                 ]
 
     except Exception as e:
-        state["response"] = f"Mi dispiace, ho avuto un problema con il test di placement: {str(e)}"
+        import logging
 
-    state["should_continue"] = True
+        logger = logging.getLogger(__name__)
+        logger.error(f"Placement node exception: {type(e).__name__}: {e}", exc_info=True)
+        state["response"] = (
+            "Mi dispiace, ho avuto un problema con il test di placement. Per favore, riprova."
+        )
+
+    state["request_done"] = state.get("single_request", False)
+    state["should_continue"] = not state.get("request_done", False)
     return state

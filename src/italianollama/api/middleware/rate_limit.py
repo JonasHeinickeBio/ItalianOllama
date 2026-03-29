@@ -115,6 +115,45 @@ class RateLimitStore:
             self._store[key].append((now, 1))
             return True, 0
 
+    async def check_limit_dry_run(
+        self,
+        key: str,
+        limit: int,
+        window: int,
+    ) -> tuple[bool, int]:
+        """Check if key would be under rate limit WITHOUT recording.
+
+        Used for pre-flight checks before committing to record a request.
+        Does not modify the rate limit store.
+
+        Args:
+            key: Rate limit key (endpoint, student_id, etc.)
+            limit: Max requests in window
+            window: Time window in seconds
+
+        Returns:
+            (is_allowed, retry_after) tuple
+        """
+        async with self._lock:
+            now = time.time()
+            window_start = now - window
+
+            # Get existing entries
+            if key not in self._store:
+                return True, 0
+
+            # Count requests in window (without modifying store)
+            entries_in_window = [(ts, cnt) for ts, cnt in self._store[key] if ts > window_start]
+            current_count = sum(cnt for ts, cnt in entries_in_window)
+
+            if current_count >= limit:
+                # Calculate when we can retry
+                oldest = min((ts for ts, _ in entries_in_window), default=now)
+                retry_after = int(oldest + window - now) + 1
+                return False, retry_after
+
+            return True, 0
+
     async def cleanup_old_entries(self, max_age: int = 3600):
         """Remove entries older than max_age seconds."""
         async with self._lock:
@@ -155,12 +194,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         logger.debug(f"Rate limit check: {path} (student: {student_id or 'unknown'})")
 
-        # Check global endpoint limit
+        # Dry-run: Check all limits BEFORE consuming any bucket
+        # This prevents one failing check from burning shared endpoint quota
+
+        # Check global endpoint limit (dry-run)
         endpoint_limit = self.config.ENDPOINT_LIMITS.get(path, self.config.DEFAULT_LIMIT)
         limit, window = endpoint_limit
 
         global_key = f"endpoint:{path}"
-        allowed, retry_after = await self.store.check_limit(global_key, limit, window)
+        allowed, retry_after = await self.store.check_limit_dry_run(global_key, limit, window)
 
         if not allowed:
             logger.warning(
@@ -168,21 +210,32 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
             raise RateLimitExceeded(retry_after)
 
-        # Check per-student limit if student is identified
+        # Check per-student limit if student is identified (dry-run)
+        student_allowed = True
+        student_retry_after = 0
+
         if student_id and path in self.config.PER_STUDENT_LIMITS:
             student_limit, student_window = self.config.PER_STUDENT_LIMITS[path]
             student_key = f"student:{student_id}:{path}"
 
-            allowed, retry_after = await self.store.check_limit(
+            student_allowed, student_retry_after = await self.store.check_limit_dry_run(
                 student_key, student_limit, student_window
             )
 
-            if not allowed:
+            if not student_allowed:
                 logger.warning(
                     f"Per-student rate limit exceeded for {student_id} on {path}: "
                     f"{student_limit} requests per {student_window}s"
                 )
-                raise RateLimitExceeded(retry_after)
+                raise RateLimitExceeded(student_retry_after)
+
+        # Commit: All checks passed, now record the requests
+        await self.store.check_limit(global_key, limit, window)
+
+        if student_id and path in self.config.PER_STUDENT_LIMITS:
+            student_limit, student_window = self.config.PER_STUDENT_LIMITS[path]
+            student_key = f"student:{student_id}:{path}"
+            await self.store.check_limit(student_key, student_limit, student_window)
 
         # Proceed with request
         response = await call_next(request)

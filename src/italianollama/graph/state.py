@@ -30,3 +30,8 @@ class TutorState(TypedDict, total=False):
     # Response
     response: str  # Generated response to student
     should_continue: bool  # Whether to continue conversation
+
+    # Workflow control
+    single_request: bool  # Whether this is a single-request invocation (no multi-turn)
+    request_done: bool  # Flag set by nodes when response is complete; triggers terminal node
+    router_decision: str  # Decision made by router about next node

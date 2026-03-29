@@ -62,18 +62,35 @@ async def translation_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tu
 
         # Evaluate translation if student submitted one
         last_user_msg = None
+        last_assistant_msg = None
+
         for msg in reversed(messages):
-            if msg.get("role") == "user":
+            if msg.get("role") == "user" and not last_user_msg:
                 last_user_msg = msg.get("content", "")
+            elif msg.get("role") == "assistant" and not last_assistant_msg:
+                last_assistant_msg = msg.get("content", "")
+            if last_user_msg and last_assistant_msg:
                 break
 
         if last_user_msg and len(messages) > 1:
-            # Score the translation
+            # Score the translation with full context
             try:
+                direction = exercise_state.get("direction", "it_en")
+                direction_text = (
+                    "Italian to English" if direction == "it_en" else "English to Italian"
+                )
+
+                # Build comprehensive evaluation prompt with source and translation
+                evaluation_prompt = (
+                    f"Evaluation task:\n"
+                    f"Direction: {direction_text}\n"
+                    f"Source text (from tutor): {last_assistant_msg}\n"
+                    f"Student's translation: {last_user_msg}\n\n"
+                    f"Score the student's translation accuracy."
+                )
+
                 score_data = await llm.chat_with_json(
-                    messages=[
-                        {"role": "user", "content": f"Evaluate this translation: {last_user_msg}"}
-                    ],
+                    messages=[{"role": "user", "content": evaluation_prompt}],
                     response_schema={
                         "score": "integer (0-100)",
                         "feedback": "string",
@@ -96,9 +113,15 @@ async def translation_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tu
             except Exception:
                 pass  # Non-critical
 
-    except Exception as e:
-        state["response"] = f"Mi dispiace, errore nell'esercizio di traduzione: {str(e)}"
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Translation node exception: {type(e).__name__}: {e}", exc_info=True)
+        state["response"] = (
+            "Mi dispiace, errore nell'esercizio di traduzione. Per favore, riprova."
+        )
 
     state["exercise_state"] = exercise_state
-    state["should_continue"] = True
+    state["request_done"] = state.get("single_request", False)
+    state["should_continue"] = not state.get("request_done", False)
     return state

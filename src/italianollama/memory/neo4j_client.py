@@ -74,14 +74,14 @@ class Neo4jClient:
         """Get student with level and stats."""
         query = """
         MATCH (s:Student {student_id: $student_id})
-        OPTIONAL MATCH (s)-[:HAS_LEVEL]->(l:CEFRLevel)
+        OPTIONAL MATCH (s)-[rl:HAS_LEVEL]->(l:CEFRLevel)
         OPTIONAL MATCH (s)-[:KNOWS]->(v:Vocabulary)
         OPTIONAL MATCH (s)-[:COMPLETED]->(e:Exercise)
-        WITH s, l, count(DISTINCT v) AS vocab_count, count(DISTINCT e) AS exercise_count
+        WITH s, l, rl, count(DISTINCT v) AS vocab_count, count(DISTINCT e) AS exercise_count
         RETURN s.student_id AS student_id,
                s.name AS name,
                l.code AS level,
-               l.confidence AS level_confidence,
+               rl.confidence AS level_confidence,
                vocab_count,
                exercise_count,
                s.created_at AS created_at
@@ -105,9 +105,9 @@ class Neo4jClient:
         query = """
         MERGE (s:Student {student_id: $student_id})
         MERGE (l:CEFRLevel {code: $level})
-        SET l.confidence = $confidence,
-            l.assessed_at = datetime()
-        MERGE (s)-[:HAS_LEVEL]->(l)
+        MERGE (s)-[r:HAS_LEVEL]->(l)
+        SET r.confidence = $confidence,
+            r.assessed_at = datetime()
         """
 
         async with self._driver.session(database=self.database) as session:
@@ -132,12 +132,12 @@ class Neo4jClient:
         query = """
         MERGE (s:Student {student_id: $student_id})
         MERGE (v:Vocabulary {word: $word, language: 'italian'})
-        SET v.translation = $translation,
-            v.topic = $topic,
-            v.level = $level,
-            v.confidence = 0.0,
-            v.created_at = datetime()
-        MERGE (s)-[:KNOWS]->(v)
+        ON CREATE SET v.translation = $translation,
+                      v.topic = $topic,
+                      v.level = $level
+        MERGE (s)-[r:KNOWS]->(v)
+        SET r.confidence = 0.0,
+            r.learned_at = datetime()
         """
 
         async with self._driver.session(database=self.database) as session:
@@ -157,12 +157,12 @@ class Neo4jClient:
     ) -> list[dict]:
         """Get student's vocabulary with confidence scores."""
         query = """
-        MATCH (s:Student {student_id: $student_id})-[:KNOWS]->(v:Vocabulary)
+        MATCH (s:Student {student_id: $student_id})-[r:KNOWS]->(v:Vocabulary)
         RETURN v.word AS word,
                v.translation AS translation,
                v.topic AS topic,
-               v.confidence AS confidence
-        ORDER BY v.confidence ASC
+               r.confidence AS confidence
+        ORDER BY r.confidence ASC
         LIMIT $limit
         """
 
@@ -179,9 +179,9 @@ class Neo4jClient:
     ):
         """Update confidence score for vocabulary (spaced repetition)."""
         query = """
-        MATCH (s:Student {student_id: $student_id})-[:KNOWS]->(v:Vocabulary {word: $word})
-        SET v.confidence = $confidence,
-            v.last_practiced = datetime()
+        MATCH (s:Student {student_id: $student_id})-[r:KNOWS]->(v:Vocabulary {word: $word})
+        SET r.confidence = $confidence,
+            r.last_practiced = datetime()
         """
 
         async with self._driver.session(database=self.database) as session:
@@ -210,10 +210,10 @@ class Neo4jClient:
             rule: $rule,
             level: $level
         })
-        SET e.corrected = $corrected,
-            e.seen_count = coalesce(e.seen_count, 0) + 1,
-            e.last_seen = datetime()
-        MERGE (s)-[:MADE_ERROR]->(e)
+        ON CREATE SET e.corrected = $corrected
+        MERGE (s)-[r:MADE_ERROR]->(e)
+        SET r.seen_count = coalesce(r.seen_count, 0) + 1,
+            r.last_seen = datetime()
         """
 
         async with self._driver.session(database=self.database) as session:
@@ -233,12 +233,12 @@ class Neo4jClient:
     ) -> list[dict]:
         """Get most common grammar errors for student."""
         query = """
-        MATCH (s:Student {student_id: $student_id})-[:MADE_ERROR]->(e:GrammarError)
+        MATCH (s:Student {student_id: $student_id})-[r:MADE_ERROR]->(e:GrammarError)
         RETURN e.rule AS rule,
                e.original AS original,
                e.corrected AS corrected,
-               e.seen_count AS seen_count
-        ORDER BY e.seen_count DESC
+               r.seen_count AS seen_count
+        ORDER BY r.seen_count DESC
         LIMIT $limit
         """
 

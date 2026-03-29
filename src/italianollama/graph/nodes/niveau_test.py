@@ -56,6 +56,7 @@ async def niveau_test_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tu
         exercise_state["test_type"] = "TELC"
         exercise_state["skills"] = {
             "reading": {"score": 0, "total": 0},
+            "writing": {"score": 0, "total": 0},
             "listening": {"score": 0, "total": 0},
             "speaking": {"score": 0, "total": 0},
         }
@@ -105,10 +106,21 @@ async def niveau_test_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tu
                     s["score"] = s.get("score", 0) + score
                     s["total"] = s.get("total", 0) + 1
 
-                # Calculate overall readiness
-                total_score = sum(s["score"] for s in exercise_state["skills"].values())
-                total_max = sum(s["total"] for s in exercise_state["skills"].values())
-                readiness = (total_score / total_max) if total_max > 0 else 0
+                # Calculate overall readiness as average of skill averages (0-100 range)
+                # Each skill's readiness = average score for that skill (0-100)
+                # Overall readiness = mean of skill readiness values
+                skill_readiness_values = []
+                for skill_data in exercise_state["skills"].values():
+                    if skill_data["total"] > 0:
+                        skill_avg = (skill_data["score"] / skill_data["total"]) * 100
+                        skill_readiness_values.append(skill_avg)
+
+                # Readiness is stored as 0-100 (percentage)
+                readiness = (
+                    sum(skill_readiness_values) / len(skill_readiness_values)
+                    if skill_readiness_values
+                    else 0
+                )
 
                 # Store test results
                 await neo4j_client.record_niveau_test(
@@ -120,7 +132,7 @@ async def niveau_test_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tu
                 )
 
                 state["response"] += (
-                    f"\n\nIl tuo punteggio readiness per {test_type} {level}: {int(readiness * 100)}%"
+                    f"\n\nIl tuo punteggio readiness per {test_type} {level}: {readiness:.1f}%"
                 )
 
             except Exception:
