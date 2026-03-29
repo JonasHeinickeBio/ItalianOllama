@@ -3,6 +3,7 @@
 Handles all Neo4j operations for student data, vocabulary, and progress.
 """
 
+import contextlib
 import json
 
 from neo4j import AsyncGraphDatabase
@@ -337,8 +338,14 @@ class Neo4jClient:
     async def setup_schema(self):
         """Create constraints and indexes."""
         constraints = [
-            "CREATE CONSTRAINT student_id IF NOT EXISTS FOR (s:Student) REQUIRE s.student_id IS UNIQUE",
-            "CREATE CONSTRAINT vocab_word IF NOT EXISTS FOR (v:Vocabulary) REQUIRE v.word IS UNIQUE",
+            (
+                "CREATE CONSTRAINT student_id IF NOT EXISTS FOR (s:Student) "
+                "REQUIRE s.student_id IS UNIQUE"
+            ),
+            (
+                "CREATE CONSTRAINT vocab_word IF NOT EXISTS FOR (v:Vocabulary) "
+                "REQUIRE v.word IS UNIQUE"
+            ),
         ]
 
         indexes = [
@@ -349,13 +356,9 @@ class Neo4jClient:
 
         async with self._driver.session(database=self.database) as session:
             for c in constraints:
-                try:
-                    await session.run(c)
-                except Exception:
-                    pass  # Already exists
+                with contextlib.suppress(Exception):
+                    await session.run(c)  # Already exists
 
             for i in indexes:
-                try:
+                with contextlib.suppress(Exception):
                     await session.run(i)
-                except Exception:
-                    pass

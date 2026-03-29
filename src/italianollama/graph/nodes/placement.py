@@ -88,8 +88,10 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
                     state["level_confidence"],
                 )
 
+                # Build response with student's CEFR level
+                reason = level_data.get("reasoning", "")
                 state["response"] = (
-                    f"Ho determinato che il tuo livello è {state['current_level']}. {level_data.get('reasoning', '')}"
+                    f"Ho determinato che il tuo livello è {state['current_level']}. {reason}"
                 )
             except Exception:
                 # Fallback to text response

@@ -2,8 +2,12 @@
 
 Flashcard loop with spaced repetition."""
 
+import logging
+
 from italianollama.graph.nodes.base import LLMClient
 from italianollama.graph.state import TutorState
+
+logger = logging.getLogger(__name__)
 
 VOCABULARY_PROMPT = """You are an Italian vocabulary tutor.
 
@@ -99,15 +103,16 @@ async def vocabulary_node(state: TutorState, neo4j_client) -> TutorState:
             except Exception:
                 pass  # Non-critical
 
-        import logging
-
-        logger = logging.getLogger(__name__)
+    except Exception as e:
         logger.error(f"Vocabulary node exception: {type(e).__name__}: {e}", exc_info=True)
         state["response"] = (
             "Mi dispiace, errore nell'esercizio di vocabolario. Per favore, riprova."
         )
 
     state["exercise_state"] = exercise_state
+    state["request_done"] = state.get("single_request", False)
+    state["should_continue"] = not state.get("request_done", False)
+    return state
     state["request_done"] = state.get("single_request", False)
     state["should_continue"] = not state.get("request_done", False)
     return state
