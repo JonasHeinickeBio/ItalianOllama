@@ -69,6 +69,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 addopts = "-ra -q"
 testpaths = ["tests"]
+asyncio_mode = "strict"
 markers = [
   "slow: mark test as slow (use '-m \"not slow\"' to skip)",
   "integration: mark test as integration (use '-m \"not integration\"' to skip)",
