@@ -2,6 +2,7 @@
 
 Grammar drilling with error detection and correction.
 """
+
 from typing import TYPE_CHECKING
 
 from italianollama.graph.nodes.base import LLMClient
@@ -20,6 +21,7 @@ Your task is to:
 
 Respond in Italian or English based on student's level.
 Be encouraging and explain grammar rules clearly."""
+
 
 async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorState:
     """Run grammar exercise.
@@ -63,6 +65,7 @@ async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorS
 
         if last_user_msg and len(messages) > 1:
             # Analyze for grammar errors
+            try:
                 error_analysis = await llm.chat_with_json(
                     messages=[
                         {
@@ -103,5 +106,4 @@ async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorS
 
     state["exercise_state"] = exercise_state
     state["should_continue"] = True
-    return state
     return state
