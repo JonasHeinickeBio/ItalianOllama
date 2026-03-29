@@ -1,13 +1,16 @@
 """Placement test node - Phase 2.
 
-Determines student's CEFR level (A1-C2) through questions.
+Determines student's CEFR level (A1-C2) through adaptive questions.
 """
 
-from app.graph.nodes.base import LLMClient
-from app.graph.state import TutorState
+from typing import TYPE_CHECKING
 
-# CEFR levels
-CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+from italianollama.graph.nodes.base import LLMClient
+from italianollama.graph.state import CEFR_LEVELS, TutorState
+
+if TYPE_CHECKING:
+    from italianollama.memory.neo4j_client import Neo4jClient
+
 
 # Placement test system prompt
 PLACEMENT_PROMPT = """You are conducting a placement test to determine the student's Italian language level.
@@ -22,30 +25,12 @@ Evaluate and return a JSON with:
 Be encouraging and professional."""
 
 
-async def placement_node(state: TutorState, neo4j_client) -> TutorState:
+async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorState:
     """Run placement test to determine student level.
-        router_decision: str  # Decision from router node
 
-
-        This node is called when:
-        - New student (no level stored)
-
-
-    # CEFR Level constants
-    CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
-
-    # Exercise type constants
-    EXERCISE_TYPES = [
-        "placement",
-        "grammar",
-        "vocabulary",
-        "translation",
-        "free_writing",
-        "niveau_test",
-        "chat",
-    ]
-        # Routing
-        - Student requests re-assessment
+    This node is called when:
+    - New student (no level stored)
+    - Student requests re-assessment
     """
     llm = LLMClient()
 
@@ -78,7 +63,6 @@ async def placement_node(state: TutorState, neo4j_client) -> TutorState:
             state["response"] = response
         else:
             # Student answered questions, determine level
-            # Extract level from response
             try:
                 # Try to parse as JSON first
                 level_data = await llm.chat_with_json(
@@ -90,7 +74,11 @@ async def placement_node(state: TutorState, neo4j_client) -> TutorState:
                     },
                     system_prompt=PLACEMENT_PROMPT,
                 )
-                state["current_level"] = level_data.get("level", "A1")
+                level = level_data.get("level", "A1")
+                # Validate level is a valid CEFR level
+                if level not in CEFR_LEVELS:
+                    level = "A1"
+                state["current_level"] = level
                 state["level_confidence"] = level_data.get("confidence", 0.5)
 
                 # Store in Neo4j

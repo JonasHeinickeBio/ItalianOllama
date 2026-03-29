@@ -1,10 +1,10 @@
-"""Free writing exercise node - Phase 3.
+"""Placement test node - Phase 2.
 
-Open prompt writing with correction and feedback.
+Determines student's CEFR level (A1-C2) through questions.
 """
 
-from app.graph.nodes.base import LLMClient
-from app.graph.state import TutorState
+from italianollama.graph.nodes.base import LLMClient
+from italianollama.graph.state import TutorState
 
 FREE_WRITING_PROMPT = """You are an Italian writing tutor.
 
