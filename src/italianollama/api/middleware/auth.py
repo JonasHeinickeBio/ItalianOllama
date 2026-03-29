@@ -94,11 +94,7 @@ async def get_current_student(
         AuthenticationError: If credentials missing or invalid
     """
     if not credentials:
-        # Also check query parameter as fallback
-        student_id = request.query_params.get("student_id")
-        if not student_id:
-            raise AuthenticationError("Missing authorization credentials")
-        return student_id
+        raise AuthenticationError("Missing authorization credentials")
 
     token = credentials.credentials
     payload = verify_access_token(token)
