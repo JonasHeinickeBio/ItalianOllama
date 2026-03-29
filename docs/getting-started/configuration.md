@@ -16,12 +16,24 @@ This guide explains all configuration options available in ItalianOllama.
 
 ### LLM Provider Configuration
 
-#### Blablador (Recommended)
+#### Blablador (Recommended for Research)
 
 ```bash
 BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
 BLABLADOR_API_KEY=your_api_key
 BLABLADOR_MODEL=alias-fast
+```
+
+#### OpenRouter (Free Models - Recommended for Development)
+
+OpenRouter provides free access to many models. Get your API key from https://openrouter.ai/
+
+```bash
+# Get free API key from https://openrouter.ai/keys
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
+
+# Using free model (step-3.5-flash)
+LITELLM_MODEL=tutor-free
 ```
 
 #### Ollama (Local)

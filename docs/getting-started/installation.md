@@ -58,14 +58,21 @@ USE_AURA=true
 # NEO4J_PASSWORD=your_password
 # USE_AURA=false
 
-# Blablador (Helmholtz LLM) - RECOMMENDED
-BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
-BLABLADOR_API_KEY=your_api_key
-BLABLADOR_MODEL=alias-fast
+# OpenRouter (Free Models) - RECOMMENDED for development
+# Get free API key: https://openrouter.ai/keys
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
+LITELLM_MODEL=tutor-free
+
+# Or Blablador (Helmholtz LLM) - RECOMMENDED for production
+# BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
+***REMOVED***=your_api_key
+# BLABLADOR_MODEL=alias-fast
+# LITELLM_MODEL=tutor
 
 # Or Ollama (local)
 # OLLAMA_BASE_URL=http://localhost:11434
 # OLLAMA_MODEL=llama3.2
+# LITELLM_MODEL=ollama-local
 
 # LiteLLM Settings
 LITELLM_BASE_URL=http://litellm:4000

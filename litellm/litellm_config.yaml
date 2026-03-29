@@ -1,8 +1,20 @@
-# LiteLLM Configuration
-# Unified LLM router - supports Ollama, OpenAI, Anthropic, Blablador, etc.
+# eLLM Configuration
+# Unified LLM router - supports Ollama, OpenAI, Anthropic, Blablador, OpenRouter, etc.
 
 model_list:
-  # Primary: Blablador (Helmholtz) - OpenAI-compatible
+  # Primary: OpenRouter (Free models) - Recommended for development
+  - model_name: tutor-free
+    litellm_params:
+      model: stepfun/step-3.5-flash:free
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
+      rpm: 100
+      timeout: 120
+      headers:
+        HTTP-Referer: "https://github.com/JonasHeinickeBio/ItalianOllama"
+        X-Title: "ItalianOllama"
+
+  # Secondary: Blablador (Helmholtz) - OpenAI-compatible
   - model_name: tutor
     litellm_params:
       model: openai/blablador
@@ -12,20 +24,43 @@ model_list:
       timeout: 120
 
   # Fallback: Ollama (local)
-  - model_name: tutor
+  - model_name: ollama-local
     litellm_params:
       model: ollama/llama3.2
       api_base: http://host.docker.internal:11434
       rpm: 1000
       timeout: 180
 
-  # OpenAI fallback (optional)
+  # OpenRouter additional free models (fallbacks)
+  - model_name: qwen-free
+    litellm_params:
+      model: qwen/qwen-2.5-7b-instruct:free
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
+      rpm: 100
+      timeout: 120
+      headers:
+        HTTP-Referer: "https://github.com/JonasHeinickeBio/ItalianOllama"
+        X-Title: "ItalianOllama"
+
+  - model_name: llama-free
+    litellm_params:
+      model: meta-llama/llama-3.1-8b-instruct:free
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
+      rpm: 100
+      timeout: 120
+      headers:
+        HTTP-Referer: "https://github.com/JonasHeinickeBio/ItalianOllama"
+        X-Title: "ItalianOllama"
+
+  # OpenAI (optional - requires API key)
   - model_name: gpt-4o
     litellm_params:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY
 
-  # Anthropic fallback (optional)
+  # Anthropic (optional - requires API key)
   - model_name: claude
     litellm_params:
       model: anthropic/claude-3-5-sonnet-20241022
