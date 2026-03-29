@@ -113,6 +113,3 @@ async def vocabulary_node(state: TutorState, neo4j_client) -> TutorState:
     state["request_done"] = state.get("single_request", False)
     state["should_continue"] = not state.get("request_done", False)
     return state
-    state["request_done"] = state.get("single_request", False)
-    state["should_continue"] = not state.get("request_done", False)
-    return state
