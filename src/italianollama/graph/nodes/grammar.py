@@ -82,8 +82,9 @@ async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorS
                     },
                 )
 
+                exercise_state["total"] = exercise_state.get("total", 0) + 1
+
                 if error_analysis.get("has_errors"):
-                    # Record errors in Neo4j
                     for error in error_analysis.get("errors", []):
                         await neo4j_client.record_grammar_error(
                             student_id=state["student_id"],
@@ -92,12 +93,8 @@ async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorS
                             rule=error.get("rule", ""),
                             level=level,
                         )
-
-                    # Update score
-                    exercise_state["total"] = exercise_state.get("total", 0) + 1
-                    exercise_state["score"] = exercise_state.get("score", 0) + (
-                        1 if not error_analysis.get("has_errors") else 0
-                    )
+                else:
+                    exercise_state["score"] = exercise_state.get("score", 0) + 1
             except Exception:
                 pass  # Non-critical if error analysis fails
 
