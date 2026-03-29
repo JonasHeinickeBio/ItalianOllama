@@ -242,7 +242,6 @@ model_list:
       api_base: ${BLABLADOR_API_URL}
       api_key: ${BLABLADOR_API_KEY}
 
-
   # OpenRouter (free models)
   - model_name: tutor-free
     litellm_params:
@@ -258,7 +257,6 @@ model_list:
     litellm_params:
       model: ollama/llama3.2
       api_base: ${OLLAMA_BASE_URL}
-
 
   # OpenAI (paid fallback)
   - model_name: gpt-4
@@ -298,6 +296,7 @@ LITELLM_MAX_PARALLEL_REQUESTS=100
 | Provider | Italian | Speed | Reasoning | Cost |
 |----------|---------|-------|-----------|------|
 | Blablador | ⭐⭐⭐⭐⭐ | Fast | ⭐⭐⭐⭐ | Free* |
+| OpenRouter | ⭐⭐⭐⭐ | Fast | ⭐⭐⭐⭐ | Free |
 | Ollama | ⭐⭐⭐ | Medium | ⭐⭐⭐ | Local |
 | OpenAI | ⭐⭐⭐⭐ | Fast | ⭐⭐⭐⭐⭐ | Pay |
 | Anthropic | ⭐⭐⭐⭐ | Fast | ⭐⭐⭐⭐⭐ | Pay |
@@ -308,6 +307,7 @@ LITELLM_MAX_PARALLEL_REQUESTS=100
 
 | Scenario | Recommended Provider |
 |----------|---------------------|
+| Free testing | OpenRouter (step-3.5-flash:free) |
 | Production (research) | Blablador |
 | Development | Ollama |
 | Maximum quality | OpenAI GPT-4 |
