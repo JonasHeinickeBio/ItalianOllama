@@ -3,6 +3,7 @@
 Grammar drilling with error detection and correction.
 """
 
+import logging
 from typing import TYPE_CHECKING
 
 from italianollama.graph.nodes.base import LLMClient
@@ -10,6 +11,8 @@ from italianollama.graph.state import TutorState
 
 if TYPE_CHECKING:
     from italianollama.memory.neo4j_client import Neo4jClient
+
+logger = logging.getLogger(__name__)
 
 
 GRAMMAR_PROMPT = """You are an Italian language tutor focusing on grammar.
@@ -98,9 +101,7 @@ async def grammar_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorS
             except Exception:
                 pass  # Non-critical if error analysis fails
 
-        import logging
-
-        logger = logging.getLogger(__name__)
+    except Exception as e:
         logger.error(f"Grammar node exception: {type(e).__name__}: {e}", exc_info=True)
         state["response"] = (
             "Mi dispiace, errore nell'esercizio di grammatica. Per favore, riprova."

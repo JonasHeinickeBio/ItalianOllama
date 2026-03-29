@@ -2,6 +2,7 @@
 
 Italian <-> English translation with scoring."""
 
+import logging
 from typing import TYPE_CHECKING
 
 from italianollama.graph.nodes.base import LLMClient
@@ -9,6 +10,8 @@ from italianollama.graph.state import TutorState
 
 if TYPE_CHECKING:
     from italianollama.memory.neo4j_client import Neo4jClient
+
+logger = logging.getLogger(__name__)
 
 
 TRANSLATION_PROMPT = """You are an Italian translation tutor.
@@ -113,9 +116,7 @@ async def translation_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tu
             except Exception:
                 pass  # Non-critical
 
-        import logging
-
-        logger = logging.getLogger(__name__)
+    except Exception as e:
         logger.error(f"Translation node exception: {type(e).__name__}: {e}", exc_info=True)
         state["response"] = (
             "Mi dispiace, errore nell'esercizio di traduzione. Per favore, riprova."

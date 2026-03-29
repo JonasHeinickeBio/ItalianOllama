@@ -6,7 +6,7 @@ It exposes endpoints for chat, student management, and health checks.
 
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -229,9 +229,7 @@ async def get_token(request: TokenRequest, req: Request):
     )
 
 
-from fastapi import Header
-
-`@app.post`("/auth/verify")
+@app.post("/auth/verify")
 async def verify_token(authorization: str | None = Header(None)):
     """Verify JWT token validity.
 

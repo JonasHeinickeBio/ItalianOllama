@@ -2,7 +2,6 @@
 name = "italianollama"
 version = "0.1.0"
 description = "Lightweight Italian language learning assistant powered by private LLM and Neo4j."
-long-description = "A production-ready FastAPI backend for interactive Italian language learning with LangGraph workflow orchestration and Neo4j memory management."
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"

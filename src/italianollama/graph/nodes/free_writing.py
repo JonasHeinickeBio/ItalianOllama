@@ -1,10 +1,14 @@
-"""Placement test node - Phase 2.
+"""Free writing exercise node.
 
-Determines student's CEFR level (A1-C2) through questions.
+Open writing prompts with correction and feedback.
 """
+
+import logging
 
 from italianollama.graph.nodes.base import LLMClient
 from italianollama.graph.state import TutorState
+
+logger = logging.getLogger(__name__)
 
 FREE_WRITING_PROMPT = """You are an Italian writing tutor.
 
@@ -88,11 +92,9 @@ async def free_writing_node(state: TutorState, neo4j_client) -> TutorState:
                 )
 
             except Exception:
-                pass  # Non-critical
+                pass  # Non-critical analysis error
 
-        import logging
-
-        logger = logging.getLogger(__name__)
+    except Exception as e:
         logger.error(f"Free writing node exception: {type(e).__name__}: {e}", exc_info=True)
         state["response"] = "Mi dispiace, errore nell'esercizio di scrittura. Per favore, riprova."
 
