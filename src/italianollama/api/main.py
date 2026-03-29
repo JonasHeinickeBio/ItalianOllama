@@ -1,62 +1,25 @@
-"""Main FastAPI application for the language learning service."""
+"""FastAPI application - Italian Tutor Backend.
 
-from contextlib import asynccontextmanager
-import logging
+This module provides the REST API for the Italian Tutor application.
+It exposes endpoints for chat, student management, and health checks.
+"""
+
 import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from italianollama.agents.tutor import LanguageTutor
-from italianollama.llm.client import LLMClient
-from italianollama.memory.graph import MemoryGraph
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
-# Application lifespan manager
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifecycle."""
-    logger.info("Starting ItalianOllama Language Learning Service")
-
-    # Initialize LLM client
-    provider = os.getenv("AISUITE_PROVIDER", "ollama")
-    app.state.llm_client = LLMClient(provider=provider)
-
-    # Initialize memory graph
-    app.state.memory = MemoryGraph(
-        uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-        user=os.getenv("NEO4J_USER", "neo4j"),
-        password=os.getenv("NEO4J_PASSWORD", ""),
-    )
-    await app.state.memory.connect()
-
-    # Initialize tutor agent
-    app.state.tutor = LanguageTutor(llm_client=app.state.llm_client, memory=app.state.memory)
-
-    logger.info("All services initialized successfully")
-
-    yield
-
-    # Cleanup
-    logger.info("Shutting down ItalianOllama Language Learning Service")
-    await app.state.memory.close()
-
+from italianollama.graph.graph import create_tutor_graph
+from italianollama.memory.neo4j_client import Neo4jClient
 
 app = FastAPI(
-    title="ItalianOllama API",
-    description="LLM-based language learning workflow with memory",
+    title="Italian Tutor API",
+    description="AI-powered Italian language tutor with LangGraph",
     version="0.1.0",
-    lifespan=lifespan,
 )
 
-# Add CORS middleware
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,167 +28,275 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global graph instance
+_tutor_graph = None
+_neo4j_client = None
 
-# Request/Response models
-class ChatRequest(BaseModel):
-    """Request model for chat endpoint."""
+
+def get_neo4j_client() -> Neo4jClient:
+    """Get or create Neo4j client."""
+    global _neo4j_client
+    if _neo4j_client is None:
+        _neo4j_client = Neo4jClient(
+            uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+            user=os.getenv("NEO4J_USER", "neo4j"),
+            password=os.getenv("NEO4J_PASSWORD", ""),
+            database=os.getenv("NEO4J_DATABASE", "neo4j"),
+        )
+    return _neo4j_client
+
+
+def get_tutor_graph():
+    """Get or create tutor graph."""
+    global _tutor_graph
+    if _tutor_graph is None:
+        _tutor_graph = create_tutor_graph(get_neo4j_client())
+    return _tutor_graph
+
+
+# ============ Data Models ============
+
+
+class ChatMessage(BaseModel):
+    """Chat message from user."""
 
     message: str
-    language: str = "italian"
-    level: str = "intermediate"
+    student_id: str
     session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
-    """Response model for chat endpoint."""
+    """Chat response to user."""
 
     response: str
     session_id: str
-    vocabulary: list[dict] | None = None
-    grammar_notes: list[str] | None = None
+    student_level: str | None = None
 
 
-class VocabRequest(BaseModel):
-    """Request model for vocabulary management."""
+class StudentCreate(BaseModel):
+    """Create a new student."""
 
-    word: str
-    translation: str
-    examples: list[str]
-    topic: str
-    language: str = "italian"
+    student_id: str
+    name: str
 
 
-class VocabResponse(BaseModel):
-    """Response model for vocabulary endpoints."""
+class HealthResponse(BaseModel):
+    """Health check response."""
 
-    success: bool
-    message: str
-    node_id: str | None = None
+    status: str
+    neo4j: str
+    litellm: str
 
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
+# ============ Routes ============
+
+
+@app.get("/")
+def root():
+    """Root endpoint."""
+    return {
+        "name": "Italian Tutor API",
+        "version": "0.1.0",
+        "docs": "/docs",
+    }
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health():
     """Health check endpoint."""
-    status = {"status": "healthy", "llm_client": "unknown", "memory": "unknown"}
-
-    # Check LLM client
+    # Check Neo4j
+    neo4j_status = "disconnected"
     try:
-        if hasattr(app.state, "llm_client"):
-            status["llm_client"] = "connected"
+        client = get_neo4j_client()
+        if await client.verify_connectivity():
+            neo4j_status = "connected"
     except Exception:
-        status["llm_client"] = "error"
+        pass
 
-    # Check memory
+    # Check LiteLLM (simplified)
+    litellm_status = "unknown"
+    litellm_url = os.getenv("LITELLM_BASE_URL", "http://litellm:4000")
     try:
-        if hasattr(app.state, "memory"):
-            await app.state.memory.verify_connectivity()
-            status["memory"] = "connected"
+        import httpx
+
+        response = httpx.get(f"{litellm_url}/health", timeout=5)
+        if response.status_code == 200:
+            litellm_status = "connected"
     except Exception:
-        status["memory"] = "error"
+        litellm_status = f"unreachable ({litellm_url})"
 
-    if status["llm_client"] == "error" or status["memory"] == "error":
-        status["status"] = "degraded"
+    return HealthResponse(
+        status="ok" if neo4j_status == "connected" else "degraded",
+        neo4j=neo4j_status,
+        litellm=litellm_status,
+    )
 
-    return status
+
+@app.post("/v1/chat/completions")
+async def chat_completions(request: dict):
+    """OpenAI-compatible chat endpoint.
+
+    This allows Open WebUI to connect directly.
+    """
+    # Extract messages from request
+    messages = request.get("messages", [])
+
+    if not messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
+
+    # Get student info from messages or use defaults
+    student_id = "default"
+    for msg in messages:
+        if msg.get("role") == "system":
+            # Check for student_id in system prompt
+            if "student_id" in msg.get("content", ""):
+                import re
+
+                match = re.search(r"student_id[:\s]+([\w-]+)", msg.get("content", ""))
+                if match:
+                    student_id = match.group(1)
+
+    # Get last user message
+    user_message = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            user_message = msg.get("content", "")
+            break
+
+    if not user_message:
+        raise HTTPException(status_code=400, detail="No user message found")
+
+    # Run tutor graph
+    graph = get_tutor_graph()
+
+    try:
+        # Run the graph
+        result = await graph.ainvoke(
+            {
+                "student_id": student_id,
+                "messages": [({"role": "user", "content": user_message})],
+                "current_level": None,
+                "exercise_type": None,
+                "exercise_state": {},
+            }
+        )
+
+        # Get last assistant message
+        response_text = "Ciao! Sono il tuo tutore di italiano. Come posso aiutarti oggi?"
+        for msg in reversed(result.get("messages", [])):
+            if msg.get("role") == "assistant":
+                response_text = msg.get("content", response_text)
+                break
+
+        # OpenAI-compatible response
+        return {
+            "id": f"chatcmpl-{os.urandom(12).hex()}",
+            "object": "chat.completion",
+            "created": int(os.time()),
+            "model": request.get("model", "tutor"),
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_text,
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": len(user_message.split()),
+                "completion_tokens": len(response_text.split()),
+                "total_tokens": len(user_message.split()) + len(response_text.split()),
+            },
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-# Chat endpoint
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """Chat with the language tutor."""
+async def chat(message: ChatMessage):
+    """Simple chat endpoint for custom frontends."""
+    graph = get_tutor_graph()
+
     try:
-        response = await app.state.tutor.chat(
-            message=request.message,
-            language=request.language,
-            level=request.level,
-            session_id=request.session_id,
+        result = await graph.ainvoke(
+            {
+                "student_id": message.student_id,
+                "messages": [{"role": "user", "content": message.message}],
+                "current_level": None,
+                "exercise_type": None,
+                "exercise_state": {},
+            }
         )
-        return response
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
+        # Get assistant response
+        response_text = "Mi dispiace, non ho capito. Puoi ripetere?"
+        for msg in reversed(result.get("messages", [])):
+            if msg.get("role") == "assistant":
+                response_text = msg.get("content", response_text)
+                break
 
-# Vocabulary endpoints
-@app.post("/vocabulary", response_model=VocabResponse)
-async def add_vocabulary(request: VocabRequest):
-    """Add new vocabulary to the knowledge graph."""
-    try:
-        node_id = await app.state.memory.add_vocabulary(
-            word=request.word,
-            translation=request.translation,
-            examples=request.examples,
-            topic=request.topic,
-            language=request.language,
+        return ChatResponse(
+            response=response_text,
+            session_id=message.session_id or message.student_id,
+            student_level=result.get("current_level"),
         )
-        return VocabResponse(
-            success=True, message=f"Added '{request.word}' to vocabulary", node_id=node_id
-        )
+
     except Exception as e:
-        logger.error(f"Vocabulary add error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/vocabulary/{language}")
-async def get_vocabulary(language: str = "italian", topic: str | None = None):
-    """Get vocabulary for a language, optionally filtered by topic."""
+@app.post("/students")
+async def create_student(student: StudentCreate):
+    """Create a new student."""
+    client = get_neo4j_client()
+
     try:
-        vocab = await app.state.memory.get_vocabulary(language, topic)
-        return {"vocabulary": vocab}
+        await client.create_student(student.student_id, student.name)
+        return {"status": "created", "student_id": student.student_id}
     except Exception as e:
-        logger.error(f"Vocabulary get error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/vocabulary/{language}/stats")
-async def get_vocabulary_stats(language: str = "italian"):
-    """Get vocabulary statistics."""
-    try:
-        stats = await app.state.memory.get_vocabulary_stats(language)
-        return stats
-    except Exception as e:
-        logger.error(f"Vocabulary stats error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/students/{student_id}")
+async def get_student(student_id: str):
+    """Get student info and progress."""
+    client = get_neo4j_client()
 
-
-# Session endpoints
-@app.get("/session/{session_id}")
-async def get_session(session_id: str):
-    """Get session history."""
     try:
-        session = await app.state.memory.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return session
+        student = await client.get_student(student_id)
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        return student
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Session get error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/topics")
-async def get_topics():
-    """Get all available topics."""
+@app.on_event("startup")
+async def startup():
+    """Initialize connections on startup."""
+    print("Starting Italian Tutor API...")
+
+    # Test Neo4j connection
     try:
-        topics = await app.state.memory.get_topics()
-        return {"topics": topics}
+        client = get_neo4j_client()
+        await client.verify_connectivity()
+        print("✓ Neo4j connected")
     except Exception as e:
-        logger.error(f"Topics get error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"⚠ Neo4j not available: {e}")
 
 
-# LLM endpoints
-@app.post("/llm/generate")
-async def generate(prompt: str, model: str | None = None):
-    """Direct LLM generation."""
-    try:
-        result = await app.state.llm_client.generate(prompt, model=model)
-        return {"response": result}
-    except Exception as e:
-        logger.error(f"Generate error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@app.on_event("shutdown")
+async def shutdown():
+    """Cleanup on shutdown."""
+    global _neo4j_client
+    if _neo4j_client:
+        await _neo4j_client.close()
+    print("Italian Tutor API stopped")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+# Italian Tutor - Docker Compose with Neo4j Aura
+#
+# Use this with: docker compose -f docker-compose.yml -f docker-compose.aura.yml up -d
+#
+# This override file:
+#   - Uses external Neo4j Aura (cloud)
+#   - Uses external Blablador API directly (no local LiteLLM needed)
+#
+# Prerequisites:
+#   - Neo4j Aura instance running
+#   - Blablador API access
+#   - .env file with credentials
+
+services:
+  # Override FastAPI to use Aura + Blablador
+  fastapi:
+    environment:
+      # Neo4j Aura (cloud)
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - USE_AURA=true
+      
+      # Direct Blablador API (no LiteLLM needed)
+      - BLABLADOR_API_URL=${BLABLADOR_API_URL}
+      - BLABLADOR_API_KEY=${BLABLADOR_API_KEY}
+      - BLABLADOR_MODEL=${BLABLADOR_MODEL:-alias-fast}
+      
+      # Disable LiteLLM (using direct API)
+      - LITELLM_BASE_URL=
+      
+      # App settings
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
