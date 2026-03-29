@@ -1,0 +1,48 @@
+# LiteLLM Configuration
+# Unified LLM router - supports Ollama, OpenAI, Anthropic, Blablador, etc.
+
+model_list:
+  # Primary: Blablador (Helmholtz) - OpenAI-compatible
+  - model_name: tutor
+    litellm_params:
+      model: openai/blablador
+      api_base: https://api.helmholtz-blablador.fz-juelich.de/v1
+      api_key: os.environ/BLABLADOR_API_KEY
+      rpm: 60  # Rate limit
+      timeout: 120
+
+  # Fallback: Ollama (local)
+  - model_name: tutor
+    litellm_params:
+      model: ollama/llama3.2
+      api_base: http://host.docker.internal:11434
+      rpm: 1000
+      timeout: 180
+
+  # OpenAI fallback (optional)
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  # Anthropic fallback (optional)
+  - model_name: claude
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+# General settings
+settings:
+  drop_params: true
+  set_verbose: false
+  request_timeout: 120
+  telemetry: false
+
+# Router settings - fallback logic
+router_settings:
+  routing_strategy: latency-based-routing  # Use fastest available
+  redis_host: null
+  allow_retries: true
+  num_retries: 2
+  retry_after: 2
+  timeout: 120
