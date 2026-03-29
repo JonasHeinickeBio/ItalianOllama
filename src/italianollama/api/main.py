@@ -229,8 +229,10 @@ async def get_token(request: TokenRequest, req: Request):
     )
 
 
-@app.post("/auth/verify")
-async def verify_token(authorization: str | None = None):
+from fastapi import Header
+
+`@app.post`("/auth/verify")
+async def verify_token(authorization: str | None = Header(None)):
     """Verify JWT token validity.
 
     Used by frontends to check if a token is still valid.
