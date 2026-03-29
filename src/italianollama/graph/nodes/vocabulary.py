@@ -1,10 +1,9 @@
 """Vocabulary exercise node - Phase 3.
 
-Flashcard loop with spaced repetition.
-"""
+Flashcard loop with spaced repetition."""
 
-from app.graph.nodes.base import LLMClient
-from app.graph.state import TutorState
+from italianollama.graph.nodes.base import LLMClient
+from italianollama.graph.state import TutorState
 
 VOCABULARY_PROMPT = """You are an Italian vocabulary tutor.
 

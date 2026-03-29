@@ -10,8 +10,8 @@ Italian Tutor is an AI-powered language learning application that provides perso
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   OpenWebUI     │────▶│    FastAPI      │────▶│  LiteLLM/       │
-│   (Frontend)    │     │    (Backend)    │     │  Blablador      │
+│   OpenWebUI     │────▶│    FastAPI      │────▶│     LiteLLM     │
+│   (Frontend)    │     │    (Backend)    │     │  (Blablador)    │
 └─────────────────┘     └────────┬────────┘     └─────────────────┘
                                  │
                                  ▼
@@ -35,7 +35,7 @@ Italian Tutor is an AI-powered language learning application that provides perso
 ### Prerequisites
 
 - Docker & Docker Compose
-- Python 3.12+ (for local development)
+- Python 3.10+ (for local development)
 - Neo4j Aura instance (or local Neo4j)
 - LLM API access (Blablador, OpenAI, or local Ollama)
 
@@ -71,9 +71,13 @@ BLABLADOR_MODEL=alias-fast
 # OLLAMA_BASE_URL=http://localhost:11434
 # OLLAMA_MODEL=llama3.2
 
+# LiteLLM Settings
+LITELLM_BASE_URL=http://litellm:4000
+LITELLM_MODEL=tutor
+LITELLM_API_KEY=dummy
+
 # App Settings
 LOG_LEVEL=INFO
-WEBUI_SECRET_KEY=change_this_secret
 ```
 
 ### 2. Start Services
@@ -98,118 +102,100 @@ docker compose up -d
 | API Docs | http://localhost:8000/docs |
 | OpenWebUI | http://localhost:3000 |
 
+---
+
 ## Project Structure
 
 ```
 italianollama/
-├── backend/
-│   ├── app/
+├── src/italianollama/          # Main package
+│   ├── __init__.py             # Package init
+│   ├── api/                    # FastAPI application
 │   │   ├── __init__.py
-│   │   ├── main.py                 # FastAPI app + routes
-│   │   ├── graph/
-│   │   │   ├── state.py            # TutorState TypedDict
-│   │   │   ├── graph.py            # LangGraph builder
-│   │   │   └── nodes/
-│   │   │       ├── base.py         # LLM client wrapper
-│   │   │       ├── placement.py    # Phase 3: CEFR assessment
-│   │   │       ├── grammar.py      # Phase 5: Grammar drills
-│   │   │       ├── vocabulary.py   # Phase 4: Flashcards
-│   │   │       ├── translation.py  # Phase 6: Translation
-│   │   │       ├── free_writing.py # Phase 7: Writing
-│   │   │       └── niveau_test.py  # Phase 8: Exam prep
-│   │   └── memory/
-│   │       └── neo4j_client.py     # Neo4j operations
-│   ├── litellm/
-│   │   └── litellm_config.yaml     # LLM routing config
+│   │   └── main.py             # API endpoints & routes
+│   ├── cli/                    # CLI commands
+│   │   ├── __init__.py
+│   │   ├── __main__.py
+│   │   └── main.py
+│   ├── graph/                  # LangGraph workflow
+│   │   ├── __init__.py
+│   │   ├── state.py            # TutorState TypedDict
+│   │   ├── graph.py            # Graph builder & router
+│   │   └── nodes/              # LangGraph nodes
+│   │       ├── __init__.py
+│   │       ├── base.py         # LLMClient wrapper
+│   │       ├── placement.py    # CEFR placement test
+│   │       ├── vocabulary.py   # Flashcard exercises
+│   │       ├── grammar.py      # Grammar drills
+│   │       ├── translation.py  # Translation practice
+│   │       ├── free_writing.py # Writing exercises
+│   │       └── niveau_test.py  # Exam prep (TELC/Goethe)
+│   └── memory/                 # Neo4j client
+│       ├── __init__.py
+│       └── neo4j_client.py     # Database operations
+├── backend/                    # Docker services
 │   ├── docker-compose.yml
-│   ├── docker-compose.aura.yml     # Aura override
+│   ├── docker-compose.aura.yml
 │   ├── Dockerfile
+│   ├── litellm/
 │   └── requirements.txt
-├── cli.py                          # CLI tool
-├── config/                         # Configuration files
-├── secrets/                        # API keys (gitignored)
-└── docker/                         # Original docker setup
+├── tests/                      # Test suite
+├── pyproject.toml              # Poetry config
+└── README_TUTOR.md             # This file
+```
+
+### Module Details
+
+| Module | Description |
+|--------|-------------|
+| `api/main.py` | FastAPI app with chat, student, and health endpoints |
+| `graph/graph.py` | LangGraph builder with router node |
+| `graph/state.py` | TutorState TypedDict defining conversation state |
+| `graph/nodes/base.py` | LLMClient for LiteLLM communication |
+| `graph/nodes/placement.py` | CEFR level assessment (A1-C2) |
+| `graph/nodes/vocabulary.py` | Flashcard system with spaced repetition |
+| `graph/nodes/grammar.py` | Grammar exercises with error detection |
+| `graph/nodes/translation.py` | Italian↔English translation practice |
+| `graph/nodes/free_writing.py` | Open writing prompts with feedback |
+| `graph/nodes/niveau_test.py` | TELC/Goethe-style exam simulation |
+| `memory/neo4j_client.py` | Neo4j operations for student data |
+
+---
+
+## LangGraph Workflow
+
+```
+┌─────────────┐
+│   router    │ ← Entry point - determines next node
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  ┌──────────┐  ┌───────────┐  ┌─────────┐  ┌────────┐ │
+│  │placement │  │vocabulary │  │ grammar │  │  chat  │ │
+│  │  (CEFR)  │  │(flashcard)│  │ (drills)│  │ (free) │ │
+│  └────┬─────┘  └─────┬─────┘  └────┬────┘  └────┬───┘ │
+│       │              │             │            │     │
+│       └──────────────┴─────────────┴────────────┘     │
+│                         │                              │
+└─────────────────────────┼──────────────────────────────┘
+                          │
+                          ▼
+                    ┌─────────────┐
+                    │   router    │ ← Loops back
+                    └─────────────┘
 ```
 
 ---
 
-# Phased Development Roadmap
-
-## Phase 0 — Project Setup ✅ DONE
-
-- [x] Repository structure created
-- [x] Docker Compose with 4 services (OpenWebUI, FastAPI, LiteLLM, Neo4j)
-- [x] `.gitignore` for secrets
-- [x] Base docker-compose.yml
-
-## Phase 1 — Working Skeleton (Free Chat) ✅ DONE
-
-- [x] LiteLLM config with Blablador primary + Ollama fallback
-- [x] `backend/app/config.py` - environment loading
-- [x] `backend/app/graph/state.py` - TutorState TypedDict
-- [x] `backend/app/graph/nodes/respond.py` - Sofia persona
-- [x] `backend/app/graph/graph.py` - single node graph
-- [x] `backend/app/main.py` - FastAPI with `/v1/chat/completions`
-- [x] Docker Compose verified working
-
-## Phase 2 — Neo4j Student Memory 🟡 PARTIAL
-
-- [x] `backend/app/memory/neo4j_client.py` - async Neo4j driver
-- [ ] `memory/queries.py` - Cypher functions (integrated in client)
-- [x] Student creation and retrieval
-- [ ] LangGraph checkpointing (optional enhancement)
-
-## Phase 3 — Placement Test 🟡 PARTIAL
-
-- [x] `nodes/placement.py` - 10 adaptive questions
-- [x] CEFR level assignment (A1-C2)
-- [x] Routing logic in graph.py
-- [x] Neo4j storage for student level
-
-## Phase 4 — Vocabulary Flashcards 🟡 PARTIAL
-
-- [x] `nodes/vocabulary.py` - flashcard loop
-- [x] Spaced repetition with confidence scores
-- [x] Neo4j vocabulary storage
-
-## Phase 5 — Grammar Drills 🟡 PARTIAL
-
-- [x] `nodes/grammar.py` - grammar exercises
-- [ ] Error detection in free chat (optional)
-
-## Phase 6 — Translation Exercises 🟡 PARTIAL
-
-- [x] `nodes/translation.py` - Italian↔English translation
-- [x] Scoring system (0-100)
-
-## Phase 7 — Free Writing 🟡 PARTIAL
-
-- [x] `nodes/free_writing.py` - open prompts
-- [x] Correction and feedback
-
-## Phase 8 — Niveau Test Prep 🟡 PARTIAL
-
-- [x] `nodes/niveau_test.py` - TELC/Goethe-style tests
-- [x] Readiness scoring per skill
-
-## Phase 9 — Production Hardening 🔴 PENDING
-
-- [ ] Swap to Neo4j Aura (already supported via docker-compose.aura.yml)
-- [ ] Add authentication to FastAPI
-- [ ] Rate limiting
-- [ ] Observability (Langfuse/LiteLLM dashboard)
-- [ ] GitHub Actions CI
-- [ ] Complete README
-
----
-
-## Implementation Status Summary
+## Development Phases
 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 0 | ✅ DONE | Project setup & Docker |
 | Phase 1 | ✅ DONE | Working skeleton with Sofia |
-| Phase 2 | 🟡 PARTIAL | Neo4j client done, queries integrated |
+| Phase 2 | ✅ DONE | Neo4j client with student memory |
 | Phase 3 | ✅ DONE | Placement test node |
 | Phase 4 | ✅ DONE | Vocabulary flashcards |
 | Phase 5 | ✅ DONE | Grammar drills |
@@ -220,7 +206,6 @@ italianollama/
 
 **Legend:**
 - ✅ DONE - Fully implemented
-- 🟡 PARTIAL - Core implemented, optional enhancements pending
 - 🔴 PENDING - Not yet implemented
 
 ---
@@ -228,19 +213,19 @@ italianollama/
 ## Neo4j Schema
 
 ```cypher
-# Student
+# Student node with CEFR level
 (:Student {student_id, name, created_at})-[:HAS_LEVEL]->(:CEFRLevel {code, confidence})
 
-# Vocabulary
+# Vocabulary with spaced repetition
 (:Student)-[:KNOWS]->(:Vocabulary {word, translation, topic, level, confidence, last_practiced})
 
-# Grammar Errors
+# Grammar error tracking
 (:Student)-[:MADE_ERROR]->(:GrammarError {original, corrected, rule, level, seen_count})
 
-# Exercises
+# Exercise history
 (:Student)-[:COMPLETED]->(:Exercise {type, score, level, content, completed_at})
 
-# Niveau Tests
+# Niveau test results
 (:Student)-[:READY_FOR]->(:NiveauTest {test_type, level, readiness, skill_scores, completed_at})
 ```
 
@@ -249,104 +234,67 @@ italianollama/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | API info |
-| `/health` | GET | Health check |
+| `/health` | GET | Health check (Neo4j, LiteLLM) |
 | `/v1/chat/completions` | POST | OpenAI-compatible chat |
-| `/chat` | POST | Simple chat |
+| `/chat` | POST | Simple chat with student_id |
 | `/students` | POST | Create student |
-| `/students/{id}` | GET | Get student info |
+| `/students/{id}` | GET | Get student info & progress |
 
-## CLI Commands
+## Environment Variables
 
-```bash
-# Start API
-python cli.py start api
-
-# Check Neo4j
-python cli.py neo4j status
-python cli.py neo4j connect
-
-# LLM operations
-python cli.py llm list
-python cli.py llm test
-python cli.py llm chat "Ciao! Come stai?"
-
-# Vocabulary
-python cli.py vocab add "ciao" "hello" --topic greetings
-python cli.py vocab list
-python cli.py vocab stats
-
-# Configuration
-python cli.py config show
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEO4J_URI` | Neo4j connection URI | `bolt://localhost:7687` |
+| `NEO4J_USER` | Neo4j username | `neo4j` |
+| `NEO4J_PASSWORD` | Neo4j password | - |
+| `NEO4J_DATABASE` | Neo4j database | `neo4j` |
+| `LITELLM_BASE_URL` | LiteLLM API URL | `http://litellm:4000` |
+| `LITELLM_MODEL` | Model name | `tutor` |
+| `LITELLM_API_KEY` | API key | `dummy` |
 
 ## LLM Providers
 
 ### Blablador (Recommended)
 ```bash
-AISUITE_PROVIDER=blablador
 BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
 BLABLADOR_API_KEY=your_key
 ```
 
 ### Ollama (Local)
 ```bash
-AISUITE_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
 ```
 
 ### OpenAI
 ```bash
-AISUITE_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-```
-
-### Anthropic
-```bash
-AISUITE_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ## Troubleshooting
 
-### Neo4j Connection Issues
-
+### Check services
 ```bash
-# Check if Neo4j is running
 docker compose ps
-
-# View Neo4j logs
-docker compose logs neo4j
-
-# Verify Aura credentials
-# Wait 60 seconds after creating Aura instance
+docker compose logs -f
 ```
 
-### LLM Connection Issues
-
+### Neo4j connection
 ```bash
-# Test Blablador
-curl -H "Authorization: Bearer $BLABLADOR_API_KEY" \
-  $BLABLADOR_API_URL/models
-
-# Test Ollama
-curl http://localhost:11434/api/tags
+# Test Neo4j
+docker compose exec neo4j cypher-shell -u neo4j -p password "RETURN 1"
 ```
 
-### OpenWebUI Issues
-
+### LiteLLM health
 ```bash
-# Check if API is reachable from OpenWebUI
-docker compose logs openwebui
-
-# Verify API key configuration
+curl http://localhost:4000/health
 ```
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make changes following the phase structure
+3. Make changes following the module structure
 4. Add tests if applicable
 5. Submit a pull request
 
