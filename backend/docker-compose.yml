@@ -11,13 +11,11 @@
 # Quick Start:
 #   1. Create secrets: bash scripts/generate_secrets.sh
 #   2. docker compose up -d
-#   3. Access: http://localhost:3000 (WebUI) or http://localhost:8000/docs (API)
+#   3. Access: http://localhost:8501 (Chainlit) or http://localhost:8000/docs (API)
 #
 # Profiles:
 #   docker compose --profile neo4j up -d      # Include local Neo4j
 #   docker compose up -d                      # Default (cloud Neo4j only)
-
-version: '3.9'
 
 services:
   # ============================================
@@ -48,9 +46,6 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MODEL=${LITELLM_MODEL:-gpt-4}
 
-      # Security
-      - CORS_ORIGINS=${CORS_ORIGINS:-"http://localhost:3000,http://localhost:8000"}
-
     env_file:
       - ../.env
 
@@ -65,7 +60,7 @@ services:
 
     depends_on:
       litellm:
-        condition: service_healthy
+        condition: service_started
 
     restart: on-failure:3
 
@@ -102,7 +97,7 @@ services:
   # LiteLLM - LLM Router & Load Balancer
   # ============================================
   litellm:
-    image: ghcr.io/berriai/litellm:0.30.5-main
+    image: litellm/litellm:v1.82.3-stable.patch.2
     container_name: italian-tutor-litellm
 
     user: "1000:1000"
@@ -118,6 +113,7 @@ services:
       - LITELLM_CONFIG_FILE=/app/config.yaml
       - DATABASE_URL=sqlite:////data/litellm.db
       - LITELLM_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LITELLM_DISABLE_PRISMA=True
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
 
@@ -143,11 +139,11 @@ services:
           memory: 1G
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health", "||" , "exit", "0"]
       interval: 30s
       timeout: 10s
-      start_period: 30s
-      retries: 3
+      start_period: 60s
+      retries: 10
 
     networks:
       - italian-tutor-network
@@ -214,45 +210,36 @@ services:
         labels: "service=neo4j"
 
   # ============================================
-  # OpenWebUI - Web Interface
+  # Chainlit - Chat Interface
   # ============================================
-  # ============================================
-  # OpenWebUI - Web Interface
-  # ============================================
-  openwebui:
-    image: ghcr.io/open-webui/open-webui:0.1.108
-    container_name: italian-tutor-webui
+  chainlit:
+    build:
+      context: ..
+      dockerfile: src/italianollama/frontend/Dockerfile
+    container_name: italian-tutor-chainlit
 
     user: "1000:1000"
 
-    volumes:
-      - openwebui-data:/app/backend/data
-
     environment:
-      # API Configuration
-      - OPENAI_API_BASE_URL=http://fastapi:8000/v1
-      - DEFAULT_MODELS=${DEFAULT_MODELS:-gpt-4}
-
-      # Security Settings
-      - ENABLE_SIGNUP=false
-      - ENABLE_API_KEY_AUTH=true
-      - TRUSTED_SERVER_URLS=http://fastapi:8000
-      - WEBUI_SESSION_COOKIE_SECURE=true
-      - WEBUI_SESSION_COOKIE_SAMESITE=Lax
-
-      # Localization
-      - DEFAULT_LOCALE=it
-      - DEFAULT_LANGUAGE=it
+      # Backend API Configuration (matches italianollama.frontend.config)
+      - BACKEND_URL=http://fastapi:8000
+      - BACKEND_TIMEOUT=240
+      - DEFAULT_STUDENT_ID=demo
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+      # Chainlit Configuration
+      - CHAINLIT_HOST=0.0.0.0
+      - CHAINLIT_PORT=8501
+
+      # Logging
+      - LOG_LEVEL=INFO
 
     env_file:
       - ../.env
 
-    secrets:
-      - webui_secret_key
-
     ports:
-      - "${WEBUI_PORT:-3000}:8080"
+      - "${CHAINLIT_PORT:-8501}:8501"
 
     depends_on:
       fastapi:
@@ -270,7 +257,7 @@ services:
           memory: 512M
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -284,7 +271,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-        labels: "service=openwebui"
+        labels: "service=chainlit"
 
 # ============================================
 # Volumes - Data Persistence
@@ -295,8 +282,6 @@ volumes:
   neo4j-logs:
     driver: local
   litellm-db:
-    driver: local
-  openwebui-data:
     driver: local
 
 # ============================================
@@ -332,5 +317,3 @@ secrets:
     file: ../secrets/litellm_api_key.txt
   litellm_salt_key:
     file: ../secrets/litellm_salt_key.txt
-  webui_secret_key:
-    file: ../secrets/webui_secret_key.txt

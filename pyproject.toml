@@ -2,7 +2,6 @@
 name = "italianollama"
 version = "0.1.0"
 description = "Lightweight Italian language learning assistant powered by private LLM and Neo4j."
-long-description = "A production-ready FastAPI backend for interactive Italian language learning with LangGraph workflow orchestration and Neo4j memory management."
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -88,6 +87,9 @@ python = ">=3.10,<4.0"
 fastapi = "^0.115.0"
 uvicorn = { extras = ["standard"], version = "^0.32.0" }
 
+# Frontend - Chat Interface
+chainlit = ">=2.0.0"
+
 # Data Validation
 pydantic = "^2.10.0"
 pydantic-settings = "^2.6.0"
@@ -120,7 +122,6 @@ pytest-benchmark = "^5.1.0"
 coverage = "^7.9.1"
 
 # Code Quality & Formatting
-black = "^25.1.0"
 ruff = "^0.12.1"
 mypy = "^1.16.1"
 bandit = "^1.8.5"
@@ -129,6 +130,11 @@ pre-commit = "^4.2.0"
 # Type Stubs
 types-PyYAML = "6.0.12.20240311"
 typing-extensions = "^4.14.0"
+
+
+[tool.poetry.group.test.dependencies]
+coverage = "^7.13.5"
+pytest-cov = "^7.1.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,19 +1,4 @@
 # Backend Dockerfile - Italian Tutor API (Production-Ready)
-FROM python:3.12-slim-bookworm AS builder
-
-# Build stage - compile dependencies
-WORKDIR /build
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# ============================================
-# Production stage - minimal runtime
-# ============================================
 FROM python:3.12-slim-bookworm
 
 LABEL maintainer="ItalianOllama Team"
@@ -21,25 +6,26 @@ LABEL description="Italian Language Learning API with streaming"
 
 WORKDIR /app
 
-# Install only runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Security: Create non-root user
 RUN groupadd -r apiuser && useradd -r -g apiuser apiuser
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /home/apiuser/.local
-
-# Copy source code
-COPY src /app/src
+# Copy source code  and set ownership
+COPY --chown=apiuser:apiuser src /app/src
 
 # Set environment
-ENV PATH=/home/apiuser/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app/src
 
 # Switch to non-root user
 USER apiuser
