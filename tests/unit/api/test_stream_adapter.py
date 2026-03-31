@@ -253,4 +253,4 @@ class TestStreaming:
         assert "__COMPONENT__" in result
         assert "drill_card" in result
         assert "key" in result
-"
+""

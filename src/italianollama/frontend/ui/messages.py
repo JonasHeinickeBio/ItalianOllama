@@ -73,6 +73,16 @@ class MessageHandler:
             model,
         )
 
+        # Quick availability check/ping to wake up backend
+        import httpx
+        from italianollama.frontend.config import get_settings
+        settings = get_settings()
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                await client.get(f"{settings.backend_url}/")
+        except Exception:
+            pass # Ignore errors here, let stream_chat_completions handle it
+
         try:
             async for token in stream_chat_completions(
                 messages=messages,

@@ -299,6 +299,79 @@ class Neo4jClient:
             result = await session.run(query, student_id=student_id, limit=limit)
             return await result.data()
 
+    async def get_student_stats(self, student_id: str) -> dict:
+        """Get aggregated stats for dashboard KPI metrics."""
+        query = """
+        MATCH (s:Student {student_id: $student_id})
+        OPTIONAL MATCH (s)-[:COMPLETED]->(e:Exercise)
+        OPTIONAL MATCH (s)-[:KNOWS]->(v:Vocabulary)
+        OPTIONAL MATCH (s)-[:MADE_ERROR]->(err:GrammarError)
+        WITH s, 
+             count(DISTINCT e) AS total_exercises,
+             avg(e.score) AS avg_score,
+             count(DISTINCT v) AS total_vocab,
+             count(DISTINCT err) AS total_errors
+        RETURN total_exercises,
+               coalesce(avg_score, 0) AS avg_score,
+               total_vocab,
+               total_errors,
+               5 AS streak  // Placeholder for streak logic
+        """
+        async with self._driver.session(database=self.database) as session:
+            result = await session.run(query, student_id=student_id)
+            record = await result.single()
+            return dict(record) if record else {}
+
+    async def get_test_readiness(self, student_id: str) -> list[dict]:
+        """Get CEFR test readiness scores for radar chart."""
+        query = """
+        MATCH (s:Student {student_id: $student_id})
+        OPTIONAL MATCH (s)-[:READY_FOR]->(t:NiveauTest)
+        WITH t ORDER BY t.completed_at DESC
+        WITH t.test_type AS type, t.readiness AS readiness, t.skill_scores AS skills
+        LIMIT 5
+        RETURN type, readiness, skills
+        """
+        async with self._driver.session(database=self.database) as session:
+            result = await session.run(query, student_id=student_id)
+            return await result.data()
+
+    async def get_full_knowledge_graph(self, student_id: str) -> dict:
+        """Get nodes and relationships for st-link-analysis."""
+        query = """
+        MATCH (s:Student {student_id: $student_id})-[r]->(target)
+        RETURN s, r, target
+        LIMIT 100
+        """
+        async with self._driver.session(database=self.database) as session:
+            result = await session.run(query, student_id=student_id)
+            nodes = []
+            links = []
+            node_ids = set()
+            
+            async for record in result:
+                s = record["s"]
+                target = record["target"]
+                r = record["r"]
+                
+                for node in [s, target]:
+                    if node.element_id not in node_ids:
+                        nodes.append({
+                            "id": node.element_id,
+                            "label": list(node.labels)[0],
+                            "properties": dict(node)
+                        })
+                        node_ids.add(node.element_id)
+                
+                links.append({
+                    "id": r.element_id,
+                    "source": s.element_id,
+                    "target": target.element_id,
+                    "type": r.type
+                })
+            
+            return {"nodes": nodes, "links": links}
+
     # ============ Niveau Test ============
 
     async def record_niveau_test(
@@ -335,16 +408,18 @@ class Neo4jClient:
     # ============ Setup ============
 
     async def setup_schema(self):
-        """Create constraints and indexes."""
+        """Create constraints and indexes and silence unknown token warnings."""
         constraints = [
             "CREATE CONSTRAINT student_id IF NOT EXISTS FOR (s:Student) REQUIRE s.student_id IS UNIQUE",
             "CREATE CONSTRAINT vocab_word IF NOT EXISTS FOR (v:Vocabulary) REQUIRE v.word IS UNIQUE",
         ]
 
         indexes = [
-            "CREATE INDEX student_level IF NOT EXISTS FOR (s:Student) ON (s.student_id)",
-            "CREATE INDEX vocab_topic IF NOT EXISTS FOR (v:Vocabulary) ON (v.topic)",
-            "CREATE INDEX exercise_type IF NOT EXISTS FOR (e:Exercise) ON (e.type)",
+            "CREATE INDEX student_level_idx IF NOT EXISTS FOR (s:Student) ON (s.student_id)",
+            "CREATE INDEX vocab_topic_idx IF NOT EXISTS FOR (v:Vocabulary) ON (v.topic)",
+            "CREATE INDEX exercise_type_idx IF NOT EXISTS FOR (e:Exercise) ON (e.type)",
+            "CREATE INDEX cefr_code_idx IF NOT EXISTS FOR (l:CEFRLevel) ON (l.code)",
+            "CREATE INDEX grammar_rule_idx IF NOT EXISTS FOR (g:GrammarError) ON (g.rule)",
         ]
 
         async with self._driver.session(database=self.database) as session:
@@ -352,10 +427,25 @@ class Neo4jClient:
                 try:
                     await session.run(c)
                 except Exception:
-                    pass  # Already exists
+                    pass
 
             for i in indexes:
                 try:
                     await session.run(i)
                 except Exception:
                     pass
+
+            # "Touch" labels and relationship types to register them in the DB schema
+            # This prevents "UnknownLabelWarning" and "UnknownRelationshipTypeWarning"
+            touch_query = """
+            OPTIONAL MATCH (s:Student)-[:HAS_LEVEL]->(l:CEFRLevel)
+            OPTIONAL MATCH (s)-[:KNOWS]->(v:Vocabulary)
+            OPTIONAL MATCH (s)-[:COMPLETED]->(e:Exercise)
+            OPTIONAL MATCH (s)-[:MADE_ERROR]->(err:GrammarError)
+            OPTIONAL MATCH (s)-[:READY_FOR]->(t:NiveauTest)
+            RETURN s.student_id, l.code, l.confidence, v.word, e.type, err.rule, t.test_type LIMIT 1
+            """
+            try:
+                await session.run(touch_query)
+            except Exception:
+                pass

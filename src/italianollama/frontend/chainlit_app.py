@@ -64,15 +64,42 @@ logger.info("Sofia initialized | version=%s", "1.0.0")
 async def on_chat_start() -> None:
     """Initialize a new student session.
 
-    1. Load student profile from backend (with fallback to defaults)
-    2. Store profile in Chainlit user session
-    3. Send CEFR-level appropriate greeting
+    1. Check backend availability
+    2. Load student profile from backend (with fallback to defaults)
+    3. Store profile in Chainlit user session
+    4. Send CEFR-level appropriate greeting
     """
     logger.info("Starting new chat session")
 
+    # 1. Quick availability check (Health Check)
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{settings.backend_url}/")
+            logger.info("Backend availability check: %s", resp.status_code)
+    except Exception as e:
+        logger.warning("Backend availability check failed: %s", e)
+
+    # 2. Extract student_id from query parameters if embedded
+    # Chainlit sometimes wraps query params in a list, e.g. {'student_id': ['Jonas']}
+    query_params = cl.user_session.get("client_query_params", {})
+    if not query_params and hasattr(cl.context, "session"):
+        query_params = getattr(cl.context.session, "client_query_params", {})
+    
+    logger.debug("Raw query params: %s", query_params)
+    
+    student_id = query_params.get("student_id")
+    if isinstance(student_id, list) and len(student_id) > 0:
+        student_id = student_id[0]
+    
+    if student_id:
+        logger.info("Found student_id in query params: %s", student_id)
+    else:
+        logger.debug("No student_id in query params, will use default")
+
     try:
         # Initialize session - fetches profile, stores in session
-        profile = await SessionManager.initialize_session()
+        profile = await SessionManager.initialize_session(student_id=student_id)
 
         logger.info(
             "Session initialized | student=%s | level=%s",

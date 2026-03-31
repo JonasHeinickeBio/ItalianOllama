@@ -167,7 +167,8 @@ class BackendClient:
 
         try:
             client = await self._get_client()
-            async with client.stream("POST", url, json=payload, headers=headers) as response:
+            # Streaming LLM generation needs a significantly longer timeout (5 min)
+            async with client.stream("POST", url, json=payload, headers=headers, timeout=300.0) as response:
                 response.raise_for_status()
 
                 async for line in response.aiter_lines():

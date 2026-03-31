@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     )
 
     backend_timeout: float = Field(
-        default=30.0,
+        default=120.0,
         description="HTTP request timeout in seconds (non-streaming)",
     )
 

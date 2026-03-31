@@ -109,6 +109,8 @@ def config_show():
         "AISUITE_PROVIDER",
         "BLABLADOR_API_URL",
         "LITELLM_BASE_URL",
+        "BACKEND_URL",
+        "CHAINLIT_URL",
     ]
 
     click.echo("\nCurrent configuration:\n")
@@ -117,6 +119,235 @@ def config_show():
         if "PASSWORD" in var or "KEY" in var:
             value = "***" if value else "(not set)"
         click.echo(f"  {var}: {value}")
+
+
+@cli.group()
+def kg():
+    """Directly interact with the Neo4j Knowledge Graph."""
+    pass
+
+
+@kg.command("summary")
+def kg_summary():
+    """Show counts of nodes and relationships in the graph."""
+    from italianollama.memory.neo4j_client import Neo4jClient
+    from italianollama.api.config import get_settings
+    
+    settings = get_settings()
+
+    async def get_summary():
+        client = Neo4jClient(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+            database=settings.neo4j_database
+        )
+        await client.connect()
+        async with client._driver.session(database=client.database) as session:
+            # Count nodes by label
+            node_counts = await session.run("MATCH (n) RETURN labels(n)[0] AS label, count(*) AS count")
+            # Count rels by type
+            rel_counts = await session.run("MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS count")
+            
+            nodes = await node_counts.data()
+            rels = await rel_counts.data()
+            return nodes, rels
+
+    nodes, rels = asyncio.run(get_summary())
+    
+    click.secho("\n--- Node Summary ---", fg="cyan", bold=True)
+    if not nodes:
+        click.echo("No nodes found.")
+    for n in nodes:
+        click.echo(f"  {n['label'] or 'Unlabeled'}: {n['count']}")
+        
+    click.secho("\n--- Relationship Summary ---", fg="magenta", bold=True)
+    if not rels:
+        click.echo("No relationships found.")
+    for r in rels:
+        click.echo(f"  {r['type']}: {r['count']}")
+    click.echo("")
+
+
+@kg.command("query")
+@click.argument("cypher")
+def kg_query(cypher):
+    """Execute a raw Cypher query and show JSON results."""
+    from italianollama.memory.neo4j_client import Neo4jClient
+    from italianollama.api.config import get_settings
+    import json
+
+    settings = get_settings()
+
+    async def run_query():
+        client = Neo4jClient(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+            database=settings.neo4j_database
+        )
+        await client.connect()
+        async with client._driver.session(database=client.database) as session:
+            result = await session.run(cypher)
+            return await result.data()
+
+    try:
+        data = asyncio.run(run_query())
+        click.echo(json.dumps(data, indent=2, default=str))
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red")
+
+
+@kg.command("list-nodes")
+@click.option("--label", "-l", help="Filter by node label")
+@click.option("--limit", "-n", default=20, help="Max nodes to show")
+def kg_list_nodes(label, limit):
+    """List nodes in the graph."""
+    from italianollama.memory.neo4j_client import Neo4jClient
+    from italianollama.api.config import get_settings
+    
+    settings = get_settings()
+    query = f"MATCH (n{':' + label if label else ''}) RETURN n LIMIT {limit}"
+    
+    async def get_nodes():
+        client = Neo4jClient(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+            database=settings.neo4j_database
+        )
+        await client.connect()
+        async with client._driver.session(database=client.database) as session:
+            result = await session.run(query)
+            # return the actual records to keep metadata like labels
+            nodes = []
+            async for record in result:
+                nodes.append(record["n"])
+            return nodes
+
+    nodes = asyncio.run(get_nodes())
+    for node in nodes:
+        labels = list(node.labels)
+        click.secho(f"[{labels[0] if labels else 'Node'}] ", fg="green", nl=False)
+        click.echo(f"ID: {node.element_id} | Props: {dict(node)}")
+
+
+@kg.command("list-rels")
+@click.option("--type", "-t", "rel_type", help="Filter by relationship type")
+@click.option("--limit", "-n", default=20, help="Max relationships to show")
+def kg_list_rels(rel_type, limit):
+    """List relationships in the graph."""
+    from italianollama.memory.neo4j_client import Neo4jClient
+    from italianollama.api.config import get_settings
+    
+    settings = get_settings()
+    query = f"MATCH (s)-[r{':' + rel_type if rel_type else ''}]->(t) RETURN s, r, t LIMIT {limit}"
+    
+    async def get_rels():
+        client = Neo4jClient(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+            database=settings.neo4j_database
+        )
+        await client.connect()
+        async with client._driver.session(database=client.database) as session:
+            result = await session.run(query)
+            rels = []
+            async for record in result:
+                rels.append((record["s"], record["r"], record["t"]))
+            return rels
+
+    rels = asyncio.run(get_rels())
+    if not rels:
+        click.echo("No relationships found.")
+    for s, r, t in rels:
+        s_label = list(s.labels)[0] if s.labels else "Node"
+        t_label = list(t.labels)[0] if t.labels else "Node"
+        click.echo(f"({s_label} {s.get('student_id') or s.element_id}) -[:{r.type}]-> ({t_label} {t.get('word') or t.get('code') or t.element_id})")
+
+
+# ============ Service Management ============
+
+@cli.group()
+def service():
+    """Manage ItalianOllama services (API, Chat, Dashboard)."""
+    pass
+
+
+@service.command("start")
+@click.argument("name", type=click.Choice(["api", "chainlit", "streamlit", "all"]), default="all")
+def service_start(name):
+    """Start services (api, chainlit, streamlit, or all)."""
+    from italianollama.cli.services import start_service
+    if name == "all":
+        for svc in ["api", "chainlit", "streamlit"]:
+            start_service(svc)
+            import time
+            time.sleep(1) # Small pause to let ports bind
+    else:
+        start_service(name)
+
+
+@service.command("stop")
+@click.argument("name", type=click.Choice(["api", "chainlit", "streamlit", "all"]), default="all")
+def service_stop(name):
+    """Stop services (api, chainlit, streamlit, or all)."""
+    from italianollama.cli.services import stop_service
+    if name == "all":
+        for svc in ["api", "chainlit", "streamlit"]:
+            stop_service(svc)
+    else:
+        stop_service(name)
+
+
+@service.command("restart")
+@click.argument("name", type=click.Choice(["api", "chainlit", "streamlit", "all"]), default="all")
+def service_restart(name):
+    """Restart services."""
+    from italianollama.cli.services import stop_service, start_service, is_service_running
+    
+    names = ["api", "chainlit", "streamlit"] if name == "all" else [name]
+    
+    for svc in names:
+        if is_service_running(svc):
+            stop_service(svc)
+            # Wait for port to clear
+            for _ in range(5):
+                import time
+                time.sleep(1)
+                if not is_service_running(svc):
+                    break
+        start_service(svc)
+
+
+@service.command("status")
+def service_status():
+    """Show current status of all services."""
+    from italianollama.cli.services import get_status
+    get_status()
+
+
+@service.command("logs")
+@click.argument("name", type=click.Choice(["api", "chainlit", "streamlit"]))
+@click.option("--lines", "-n", default=20, help="Number of lines to show")
+@click.option("--follow", "-f", is_flag=True, help="Follow log output")
+def service_logs(name, lines, follow):
+    """Show logs for a specific service."""
+    import subprocess
+    log_file = f"logs/{name}.log"
+    if not os.path.exists(log_file):
+        click.secho(f"⚠ Log file {log_file} not found.", fg="yellow")
+        return
+    
+    cmd = ["tail", f"-n{lines}", log_file]
+    if follow:
+        cmd.insert(1, "-f")
+    
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

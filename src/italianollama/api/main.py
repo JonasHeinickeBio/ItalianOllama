@@ -6,7 +6,7 @@ It exposes endpoints for chat, student management, and health checks.
 
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -230,7 +230,7 @@ async def get_token(request: TokenRequest, req: Request):
 
 
 @app.post("/auth/verify")
-async def verify_token(authorization: str | None = None):
+async def verify_token(authorization: str | None = Header(None)):
     """Verify JWT token validity.
 
     Used by frontends to check if a token is still valid.
@@ -498,6 +498,41 @@ async def get_student(student_id: str, req: Request):
         raise
 
 
+@app.get("/api/student/{student_id}/stats")
+async def get_student_stats(student_id: str):
+    """Get aggregated stats for dashboard KPI metrics."""
+    client = get_neo4j_client()
+    return await client.get_student_stats(student_id)
+
+
+@app.get("/api/student/{student_id}/vocabulary")
+async def get_student_vocabulary(student_id: str, limit: int = 50):
+    """Get student's vocabulary with confidence scores."""
+    client = get_neo4j_client()
+    return await client.get_student_vocabulary(student_id, limit=limit)
+
+
+@app.get("/api/student/{student_id}/grammar-errors")
+async def get_student_grammar_errors(student_id: str, limit: int = 10):
+    """Get most common grammar errors for student."""
+    client = get_neo4j_client()
+    return await client.get_common_errors(student_id, limit=limit)
+
+
+@app.get("/api/student/{student_id}/graph")
+async def get_student_graph(student_id: str):
+    """Get nodes and relationships for st-link-analysis."""
+    client = get_neo4j_client()
+    return await client.get_full_knowledge_graph(student_id)
+
+
+@app.get("/api/student/{student_id}/test-readiness")
+async def get_student_test_readiness(student_id: str):
+    """Get CEFR test readiness scores."""
+    client = get_neo4j_client()
+    return await client.get_test_readiness(student_id)
+
+
 # ============ Lifecycle Events ============
 
 
@@ -520,6 +555,10 @@ async def startup():
         client = get_neo4j_client()
         await client.verify_connectivity()
         logger.info(f"✓ Neo4j connected: {settings.neo4j_uri}")
+
+        # P0+P1 COMPLETE: Initialize DB schema (constraints, indexes, touch tokens)
+        await client.setup_schema()
+        logger.info("✓ Neo4j schema initialization complete")
     except Exception as e:
         logger.error(f"✗ Neo4j connection failed: {e}")
         logger.warning("Continuing without Neo4j (operations will fail)")

@@ -37,7 +37,6 @@ authors = [
 maintainers = [
   { name = "Jonas Heinicke", email = "jonas.heinicke@helmholtz-hzi.de" },
 ]
-dynamic = ["dependencies"]
 
 [project.urls]
 "Homepage" = "https://github.com/JonasHeinickeBio/ItalianOllama"
@@ -65,7 +64,8 @@ lint = ["ruff>=0.12.1", "black>=25.1.0", "mypy>=1.16.1"]
 format = ["black>=25.1.0", "ruff>=0.12.1"]
 
 [project.scripts]
-italianollama = "italianollama.cli.main:app"
+italianollama = "italianollama.cli.main:cli"
+
 
 [tool.semantic_release]
 version_variable = ["src/italianollama/__init__.py:__version__"]
@@ -89,6 +89,9 @@ uvicorn = { extras = ["standard"], version = "^0.32.0" }
 
 # Frontend - Chat Interface
 chainlit = ">=2.0.0"
+streamlit = "^1.31.0"
+pandas = "^2.2.0"
+plotly = "^5.18.0"
 
 # Data Validation
 pydantic = "^2.10.0"
