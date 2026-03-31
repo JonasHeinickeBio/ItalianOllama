@@ -1384,3 +1384,30 @@ MIT License - see LICENSE file
 - [Streamlit](https://streamlit.io/) - Analytics dashboard framework
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern async web framework
 - [Nginx](https://nginx.org/) - High-performance reverse proxy
+
+
+10-Step Implementation Plan
+Step 1 — Source Materials
+
+The best free sources to ingest: Sensini Grammatica Italiana (the standard Italian school grammar, ~800 rules), CILS past papers from Università per Stranieri di Siena (free download, A1–C2), PLIDA practice tests, and the CEFR Can-Do descriptor PDFs from the Council of Europe. Total download time ~30 min.
+Step 2 — Graph Schema
+
+Eight node types designed specifically for Italian: GrammarRule, Example, Exception, Verb, Conjugation, GrammarCategory, CEFRLevel, NiveauTest. Crucially, (:Student)-[:MADE_ERROR]->(:GrammarError)-[:EXPLAINED_BY]->(:GrammarRule) connects the student graph to the grammar book graph in a single Cypher traversal.
+Step 3 — Ingestion Pipeline
+
+Uses the official neo4j-graphrag Python package with three components wired in sequence: FixedSizeTextSplitter (chunks 1,500 chars) → LLMEntityRelationExtractor (gpt-4o-mini, temp=0) → Neo4jWriter. Full corpus ingests in ~30 min for roughly $1.20 total in API costs.
+Step 4 — Constraints & Indexes
+
+Full-text index across GrammarRule, Example, and Exception nodes, plus a vector index on GrammarRule.embedding for semantic search. Six CEFR level nodes pre-seeded via MERGE.
+Step 5 — Hybrid Retriever
+
+VectorCypherRetriever from the neo4j-graphrag package: vector similarity finds the closest rule, then Cypher traversal pulls HAS_EXAMPLE and HAS_EXCEPTION relationships for that rule. Two retrieval functions: retrieve_grammar_context() for generic queries, retrieve_rules_for_error() for personalised student-error lookups that cross both graphs simultaneously.
+Step 6 — LangGraph Integration
+
+The grammar_node receives a detected_error field from state, retrieves book context + student history, then injects both into a strict system prompt: "use ONLY this reference — never invent examples". This is where hallucination reduction happens.
+Step 7–8 — API & Dashboard
+
+New POST /api/grammar/lookup endpoint for free-text grammar search, and the Streamlit grammar page gains a live "Grammar Book Lookup" search box — students can query the ingested grammar knowledge graph directly from the dashboard.
+Step 9–10 — Docker & Verification
+
+Ingestion runs as a Docker Compose --profile ingest service (one-time only). Verification Cypher queries confirm expected node counts (400–800 rules, 1,500–3,000 examples) and test the cross-graph student→error→rule traversal path.

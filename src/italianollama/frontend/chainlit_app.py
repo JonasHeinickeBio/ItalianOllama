@@ -177,14 +177,6 @@ async def setup_agent(settings_dict):
 
 
 # Chainlit UI customization (optional)
-chat_settings = [
-    cl.Slider(
-        id="temperature",
-        label="Temperature",
-        value=0.7,
-        min=0,
-        max=1,
-        step=0.1,
-        tooltip="Controls response randomness (lower = more predictable)",
-    ),
-]
+# Note: Slider component may not be available in all Chainlit versions
+# Disabled for compatibility with Chainlit 2.6.3
+chat_settings = []

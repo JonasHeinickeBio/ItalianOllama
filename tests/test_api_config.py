@@ -34,6 +34,7 @@ class TestSettings:
         # Only set required vars
         env = {
             "neo4j_password": "test123",
+            "neo4j_user": "neo4j",
         }
         with patch.dict("os.environ", env, clear=True):
             settings = Settings()
@@ -58,7 +59,7 @@ class TestGetSettings:
         """Test get_settings returns cached instance."""
         import italianollama.api.config as config_module
         config_module._settings = None  # Reset
-        
+
         with patch("italianollama.api.config.Settings"):
             settings1 = get_settings()
             settings2 = get_settings()
@@ -68,14 +69,14 @@ class TestGetSettings:
         """Test settings are cached after first call."""
         import italianollama.api.config as config_module
         config_module._settings = None
-        
+
         with patch("italianollama.api.config.Settings") as mock_settings:
             mock_instance = MagicMock()
             mock_settings.return_value = mock_instance
-            
+
             result1 = get_settings()
             result2 = get_settings()
-            
+
             # Should only call Settings() once
             assert mock_settings.call_count == 1
 
@@ -87,11 +88,11 @@ class TestGetLogLevel:
         """Test get_log_level returns integer logging level."""
         import italianollama.api.config as config_module
         config_module._settings = None
-        
+
         with patch("italianollama.api.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.log_level = "INFO"
             mock_get_settings.return_value = mock_settings
-            
+
             level = get_log_level()
             assert level == 20  # logging.INFO

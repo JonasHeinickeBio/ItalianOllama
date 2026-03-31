@@ -5,7 +5,7 @@ from typing import Any
 
 import chainlit as cl
 
-from italianollama.frontend.api import StudentNotFoundError, get_student_profile
+from italianollama.frontend.api import StudentNotFoundError, create_student, get_student_profile
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class SessionManager:
 
         Fetches student profile from backend and stores in session.
         If student_id is not provided, uses default from config.
+        Auto-creates student if not found.
 
         Args:
             student_id: Student identifier (optional)
@@ -39,7 +40,7 @@ class SessionManager:
             Student profile dictionary
 
         Raises:
-            StudentNotFoundError: If student profile cannot be retrieved
+            Exception: If student creation or profile retrieval fails
         """
         from italianollama.frontend.config import get_settings
 
@@ -52,6 +53,25 @@ class SessionManager:
         try:
             profile = await get_student_profile(student_id)
             logger.debug("Retrieved student profile: %s", profile)
+
+            # Handle student not found - auto-create
+            if profile is None:
+                logger.info("Student not found, auto-creating: %s", student_id)
+                result = await create_student(student_id, f"Student {student_id}")
+
+                if result is None:
+                    logger.error("Failed to auto-create student: %s", student_id)
+                    raise StudentNotFoundError(f"Failed to create student: {student_id}")
+
+                # Fetch the newly created student profile
+                profile = await get_student_profile(student_id)
+                if profile is None:
+                    logger.error("Created student but cannot fetch profile: %s", student_id)
+                    raise StudentNotFoundError(
+                        f"Student created but profile unavailable: {student_id}"
+                    )
+
+                logger.info("Student auto-created successfully: %s", student_id)
 
             # Store in session
             cl.user_session.set(SessionManager.STUDENT_ID_KEY, student_id)
@@ -70,7 +90,7 @@ class SessionManager:
             return profile
 
         except StudentNotFoundError:
-            logger.error("Student not found: %s", student_id, exc_info=True)
+            logger.error("Student not found or creation failed: %s", student_id, exc_info=True)
             raise
         except Exception as e:
             logger.error(

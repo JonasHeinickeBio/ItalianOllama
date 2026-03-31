@@ -1,168 +1,256 @@
-"""Unit tests for stream adapter module."""
+"""Unit tests for stream adapter with mocking."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+import asyncio
 import json
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 
 class TestStreamAdapter:
-    """Tests for StreamAdapter class."""
-
-    def test_stream_adapter_import(self):
-        """Test StreamAdapter can be imported."""
-        from italianollama.api.stream_adapter import StreamAdapter
-        assert StreamAdapter is not None
-
-    def test_stream_adapter_init(self):
-        """Test StreamAdapter initialization."""
-        from italianollama.api.stream_adapter import StreamAdapter
-        
-        adapter = StreamAdapter()
-        assert adapter is not None
+    """Tests for stream_adapter module."""
 
     @pytest.mark.asyncio
-    async def test_stream_adapter_with_llm_client(self):
-        """Test StreamAdapter with LLM client."""
-        from italianollama.api.stream_adapter import StreamAdapter
-        
-        with patch("italianollama.api.stream_adapter.LLMClient") as MockLLM:
-            mock_llm = MagicMock()
-            mock_llm.chat = AsyncMock(return_value="Test response")
-            MockLLM.return_value = mock_llm
-            
-            adapter = StreamAdapter()
-            assert adapter is not None
+    async def test_stream_graph_response_basic(self):
+        """Test basic graph streaming."""
+        from italianollama.api.stream_adapter import stream_graph_response
 
-
-class TestOpenAICompat:
-    """Tests for OpenAI compatibility layer."""
-
-    def test_openai_response_format(self):
-        """Test OpenAI-compatible response format."""
-        from italianollama.api.stream_adapter import create_openai_response
-        
-        response = create_openai_response(
-            content="Ciao!",
-            model="tutor",
-            finish_reason="stop"
+        # Mock the graph
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "messages": [
+                    {"role": "user", "content": "Ciao"},
+                    {"role": "assistant", "content": "Ciao! Come stai?"},
+                ]
+            }
         )
-        
-        assert "choices" in response
-        assert len(response["choices"]) > 0
-        assert "message" in response["choices"][0]
 
-    def test_openai_stream_response_format(self):
-        """Test OpenAI streaming response format."""
-        from italianollama.api.stream_adapter import create_stream_chunk
-        
-        chunk = create_stream_chunk(
-            content="Ciao",
-            model="tutor",
-            index=0
-        )
-        
-        assert "choices" in chunk
-        assert len(chunk["choices"]) > 0
-        assert "delta" in chunk["choices"][0]
+        # Collect streamed chunks
+        chunks = []
+        async for chunk in stream_graph_response(
+            mock_graph,
+            {"student_id": "test_student", "messages": [{"role": "user", "content": "Ciao"}]},
+            "test_student",
+            "test_request",
+        ):
+            chunks.append(chunk)
 
-
-class TestEventSource:
-    """Tests for SSE event source."""
-
-    def test_create_sse_event(self):
-        """Test creating SSE event."""
-        from italianollama.api.stream_adapter import create_sse_event
-        
-        event = create_sse_event({"content": "Ciao"})
-        assert "data:" in event
-        assert "\n\n" in event
-
-    def test_create_sse_event_empty_data(self):
-        """Test SSE event with empty data."""
-        from italianollama.api.stream_adapter import create_sse_event
-        
-        event = create_sse_event("")
-        assert event is not None
-
-    def test_create_sse_event_done(self):
-        """Test SSE done event."""
-        from italianollama.api.stream_adapter import create_sse_event
-        
-        event = create_sse_event(done=True)
-        assert "data:" in event
-        assert "DONE" in event
-
-
-class TestStreamingIntegration:
-    """Tests for streaming integration."""
+        # Verify chunks
+        assert len(chunks) > 0
+        assert any("data: [DONE]" in chunk for chunk in chunks)
 
     @pytest.mark.asyncio
-    async def test_async_generator_stream(self):
-        """Test async generator for streaming."""
-        from italianollama.api.stream_adapter import StreamAdapter
-        
-        async def generate_chunks():
-            words = ["Ciao", ", ", "come", " ", "stai", "?"]
-            for word in words:
-                yield word
-        
-        result = []
-        async for chunk in generate_chunks():
-            result.append(chunk)
-        
-        assert len(result) == 6
+    async def test_stream_graph_response_empty_messages(self):
+        """Test graph streaming with empty messages."""
+        from italianollama.api.stream_adapter import stream_graph_response
 
-    def test_json_dumps_for_sse(self):
-        """Test JSON serialization for SSE."""
-        data = {"content": "Ciao!"}
-        json_str = json.dumps(data)
-        assert "Ciao" in json_str
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"messages": []})
 
+        chunks = []
+        async for chunk in stream_graph_response(
+            mock_graph,
+            {"student_id": "test", "messages": []},
+            "test",
+            "req123",
+        ):
+            chunks.append(chunk)
 
-class TestTokenCounting:
-    """Tests for token counting."""
-
-    def test_estimate_tokens(self):
-        """Test token estimation."""
-        from italianollama.api.stream_adapter import estimate_tokens
-        
-        # Simple word counting approximation
-        tokens = estimate_tokens("Ciao come stai?")
-        assert tokens > 0
-        assert isinstance(tokens, int)
-
-    def test_estimate_tokens_italian(self):
-        """Test token estimation for Italian text."""
-        from italianollama.api.stream_adapter import estimate_tokens
-        
-        text = "Buongiorno, come va oggi? Sono molto felice di vederti."
-        tokens = estimate_tokens(text)
-        assert tokens > 0
-
-
-class TestStreamErrorHandling:
-    """Tests for stream error handling."""
-
-    def test_handle_stream_error(self):
-        """Test stream error handling."""
-        from italianollama.api.stream_adapter import create_error_event
-        
-        error_event = create_error_event("Connection error")
-        assert "data:" in error_event
-        assert "error" in error_event.lower()
+        # Should still have default response
+        assert any("Ciao!" in chunk for chunk in chunks)
 
     @pytest.mark.asyncio
-    async def test_stream_with_exception(self):
-        """Test streaming handles exceptions gracefully."""
-        async def failing_generator():
+    async def test_stream_graph_response_error(self):
+        """Test graph streaming handles errors."""
+        from italianollama.api.stream_adapter import stream_graph_response
+
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = AsyncMock(side_effect=Exception("Graph error"))
+
+        chunks = []
+        async for chunk in stream_graph_response(
+            mock_graph,
+            {"student_id": "test", "messages": []},
+            "test",
+            "req123",
+        ):
+            chunks.append(chunk)
+
+        # Should have error chunk
+        assert any("error" in chunk for chunk in chunks)
+
+    def test_tokenize_response_basic(self):
+        """Test tokenization of response text."""
+        from italianollama.api.stream_adapter import _tokenize_response
+
+        result = _tokenize_response("Ciao mondo")
+        
+        assert "Ciao" in result
+        assert "mondo" in result
+
+    def test_tokenize_response_empty(self):
+        """Test tokenization of empty string."""
+        from italianollama.api.stream_adapter import _tokenize_response
+
+        result = _tokenize_response("")
+        assert result == [""]
+
+    def test_tokenize_response_single_word(self):
+        """Test tokenization of single word."""
+        from italianollama.api.stream_adapter import _tokenize_response
+
+        result = _tokenize_response("Ciao")
+        assert "Ciao" in result
+
+    @pytest.mark.asyncio
+    async def test_stream_llm_response_basic(self):
+        """Test LLM response streaming."""
+        from italianollama.api.stream_adapter import stream_llm_response
+
+        # Mock LLM stream
+        async def mock_llm_stream():
+            yield "Hello "
+            yield "world"
+
+        chunks = []
+        async for chunk in stream_llm_response(mock_llm_stream(), "req123"):
+            chunks.append(chunk)
+
+        assert len(chunks) > 0
+        assert any("[DONE]" in chunk for chunk in chunks)
+
+    @pytest.mark.asyncio
+    async def test_stream_llm_response_error(self):
+        """Test LLM response streaming handles errors."""
+        from italianollama.api.stream_adapter import stream_llm_response
+
+        async def error_stream():
+            yield "Hello"
+            raise Exception("LLM error")
+
+        chunks = []
+        async for chunk in stream_llm_response(error_stream(), "req123"):
+            chunks.append(chunk)
+
+        # Should have error chunk
+        assert any("error" in chunk for chunk in chunks)
+
+    @pytest.mark.asyncio
+    async def test_stream_with_components_basic(self):
+        """Test component-aware streaming."""
+        from italianollama.api.stream_adapter import stream_with_components
+
+        # Mock base stream with component
+        async def mock_base_stream():
+            yield "data: Hello __COMPONENT__:test|{\"key\": \"value\"}\n\n"
+            yield "data: world\n\n"
+
+        chunks = []
+        async for chunk in stream_with_components(mock_base_stream(), "req123"):
+            chunks.append(chunk)
+
+        assert len(chunks) > 0
+        assert any("__COMPONENT__" in chunk for chunk in chunks)
+
+    @pytest.mark.asyncio
+    async def test_stream_with_components_no_components(self):
+        """Test component-aware streaming without components."""
+        from italianollama.api.stream_adapter import stream_with_components
+
+        async def mock_base_stream():
+            yield "data: Hello world\n\n"
+
+        chunks = []
+        async for chunk in stream_with_components(mock_base_stream(), "req123"):
+            chunks.append(chunk)
+
+        assert len(chunks) > 0
+
+
+class TestStreaming:
+    """Tests for streaming module."""
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_response_basic(self):
+        """Test chat response streaming."""
+        from italianollama.api.streaming import stream_chat_response
+
+        async def message_chunks():
+            yield "Hello "
+            yield "world"
+
+        chunks = []
+        async for chunk in stream_chat_response(message_chunks()):
+            chunks.append(chunk)
+
+        assert len(chunks) > 0
+        assert any("choices" in chunk for chunk in chunks)
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_response_with_components(self):
+        """Test chat response with component prefix."""
+        from italianollama.api.streaming import stream_chat_response
+
+        async def message_chunks():
+            yield "__COMPONENT__:drill_card|{\"type\": \"test\"}"
+
+        chunks = []
+        async for chunk in stream_chat_response(
+            message_chunks(), include_component_prefix=True
+        ):
+            chunks.append(chunk)
+
+        assert any("__COMPONENT__" in chunk for chunk in chunks)
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_response_error(self):
+        """Test chat response handles errors."""
+        from italianollama.api.streaming import stream_chat_response
+
+        async def error_chunks():
             yield "Hello"
             raise Exception("Test error")
+
+        chunks = []
+        async for chunk in stream_chat_response(error_chunks()):
+            chunks.append(chunk)
+
+        # Should have error
+        assert any("error" in chunk for chunk in chunks)
+
+    def test_format_sse_chunk(self):
+        """Test SSE chunk formatting."""
+        from italianollama.api.streaming import format_sse_chunk
+
+        result = format_sse_chunk("Hello")
         
-        result = []
-        try:
-            async for chunk in failing_generator():
-                result.append(chunk)
-        except Exception:
-            pass  # Expected
+        assert "data:" in result
+        assert "Hello" in result
+        assert "choices" in result
+
+    def test_format_sse_chunk_with_model(self):
+        """Test SSE chunk with custom model."""
+        from italianollama.api.streaming import format_sse_chunk
+
+        result = format_sse_chunk("Test", model="custom_model")
         
-        assert len(result) == 1
+        assert "custom_model" in result
+
+    def test_format_sse_done(self):
+        """Test SSE done marker."""
+        from italianollama.api.streaming import format_sse_done
+
+        result = format_sse_done()
+        
+        assert "data: [DONE]" in result
+
+    def test_format_sse_component(self):
+        """Test SSE component formatting."""
+        from italianollama.api.streaming import format_sse_component
+
+        result = format_sse_component("drill_card", {"key": "value"})
+        
+        assert "__COMPONENT__" in result
+        assert "drill_card" in result
+        assert "key" in result
+"

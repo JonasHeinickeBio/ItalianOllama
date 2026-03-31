@@ -86,6 +86,34 @@ class BackendClient:
             logger.warning("Cannot reach backend at %s: %s", url, exc)
             raise BackendConnectionError(f"Backend unreachable: {url}") from exc
 
+    async def create_student(self, student_id: str, name: str) -> dict[str, Any] | None:
+        """Create a new student in the backend.
+
+        Args:
+            student_id: Unique student identifier
+            name: Student's name
+
+        Returns:
+            Student creation response or None on error
+        """
+        settings = get_settings()
+        url = f"{settings.backend_url}/students"
+        payload = {"student_id": student_id, "name": name}
+
+        try:
+            client = await self._get_client()
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            logger.info("Student created: %s", student_id)
+            return response.json()
+
+        except httpx.HTTPStatusError as exc:
+            logger.warning("Failed to create student %s: %s", student_id, exc)
+            raise BackendError(f"Failed to create student: {exc.response.status_code}") from exc
+        except httpx.RequestError as exc:
+            logger.warning("Cannot reach backend at %s: %s", url, exc)
+            raise BackendConnectionError(f"Backend unreachable: {url}") from exc
+
     async def get_auth_token(self, student_id: str) -> str | None:
         """Generate JWT authentication token.
 
@@ -205,6 +233,27 @@ async def get_student_profile(student_id: str) -> dict[str, Any] | None:
         return None
     except BackendConnectionError as exc:
         logger.warning("Backend unreachable: %s", exc)
+        return None
+
+
+async def create_student(student_id: str, name: str) -> dict[str, Any] | None:
+    """Create a new student (convenience wrapper).
+
+    Args:
+        student_id: Unique student identifier
+        name: Student's name
+
+    Returns:
+        Creation response or None on error
+    """
+    try:
+        client = get_backend_client()
+        return await client.create_student(student_id, name)
+    except BackendConnectionError as exc:
+        logger.warning("Backend unreachable: %s", exc)
+        return None
+    except BackendError as exc:
+        logger.warning("Failed to create student: %s", exc)
         return None
 
 

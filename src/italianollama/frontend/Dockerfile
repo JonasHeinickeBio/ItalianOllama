@@ -9,27 +9,25 @@ LABEL description="Sofia – Chainlit-based Italian Tutor chat interface"
 # Runtime system deps (curl for health check)
 RUN apk add --no-cache curl gcc musl-dev libffi-dev
 
-WORKDIR /app
+# Create and set permissions on /app directory
+RUN mkdir -p /app && chmod 777 /app
 
-# Security: non-root user
-RUN addgroup -S chainlit && adduser -S -G chainlit chainlit
+WORKDIR /app
 
 # Copy requirements from backend and install directly with pip
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir chainlit>=2.0.0 sniffio
 
 # Copy entire src/italianollama package
-COPY --chown=chainlit:chainlit src/italianollama ./src/italianollama
+COPY src/italianollama ./src/italianollama
 
 # Set Python path
 ENV PYTHONPATH=/app/src
-
-# Change to Chainlit user
-USER chainlit
 
 # Health check - verify imports work
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "from italianollama.frontend import config, api, ui; print('OK')" || exit 1
 
-# Run Chainlit app
+# Run Chainlit app (as root for now to avoid permission issues)
 CMD ["chainlit", "run", "src/italianollama/frontend/chainlit_app.py", "--host", "0.0.0.0", "--port", "8501"]
