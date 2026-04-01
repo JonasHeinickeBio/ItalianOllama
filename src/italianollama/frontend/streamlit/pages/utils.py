@@ -9,7 +9,7 @@ from collections.abc import Callable
 from functools import wraps
 import logging
 import os
-from typing import Any
+from typing import Any, Optional
 
 import streamlit as st
 
@@ -68,19 +68,44 @@ def get_backend_url() -> str:
 
 
 def initialize_session_state():
-    """Initialize all required session state variables."""
+    """
+    Initialize all required session state variables.
+
+    First tries to restore from browser cookies for persistence across page reloads.
+    Falls back to defaults if no cookies found.
+    """
     logger.debug("🔄 Initializing session state...")
+
+    # Try to restore from browser cookies first (survives page reloads)
+    if "student_id" not in st.session_state:
+        from italianollama.frontend.streamlit.auth.browser_storage import (
+            restore_session_from_cookies,
+        )
+
+        student_id, access_token = restore_session_from_cookies()
+        if student_id and access_token:
+            logger.info(f"🍪 Restored session from cookies | student_id={student_id}")
+            st.session_state.student_id = student_id
+            st.session_state.access_token = access_token
+            st.session_state.authenticated = True
+        else:
+            logger.info("ℹ️ No active session in cookies - using defaults")
+
+    # Initialize remaining session state variables with defaults
     defaults = {
         "student_id": None,
+        "access_token": None,  # Add access_token to defaults
         "authenticated": False,
         "profile": None,
         "chat_history": [],
         "api_client": None,
     }
+
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
             logger.debug(f"  ✓ Set {key} = {value}")
+
     logger.info(f"✓ Session state initialized with {len(defaults)} variables")
 
 
@@ -106,7 +131,7 @@ def require_auth() -> bool:
     return True
 
 
-def get_student_id() -> str | None:
+def get_student_id() -> Optional[str]:
     """Get current student ID, require auth first."""
     require_auth()
     return st.session_state.student_id
@@ -238,7 +263,7 @@ def cache_student_data(ttl: int = 60):
 # ============================================================================
 
 
-def metric_card(label: str, value: Any, emoji: str = "📊", delta: str | None = None):
+def metric_card(label: str, value: Any, emoji: str = "📊", delta: Optional[str] = None):
     """Render a metric card with consistent styling."""
     st.metric(label, value, delta=delta)
 

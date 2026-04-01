@@ -176,7 +176,6 @@ def start_service(name):
     )
 
 
-
 def stop_service(name):
     services = get_services()
     svc = services.get(name)
@@ -218,37 +217,39 @@ def get_status():
 
 def restart_services_sequentially(names, startup_delay=15):
     """Restart services sequentially with timeout between each startup.
-    
+
     Args:
         names: List of service names to restart in order
         startup_delay: Seconds to wait between service startups (default: 15)
     """
     # Define startup order: API → Streamlit → Chainlit
     startup_order = ["api", "streamlit", "chainlit"]
-    
+
     # Filter to requested services in startup order
     services_to_restart = [s for s in startup_order if s in names]
-    
-    click.echo(f"\n📋 Restarting {len(services_to_restart)} services in sequence with {startup_delay}s delay...")
+
+    click.echo(
+        f"\n📋 Restarting {len(services_to_restart)} services in sequence with {startup_delay}s delay..."
+    )
     click.echo("-" * 60)
-    
+
     for i, svc in enumerate(services_to_restart, 1):
         click.echo(f"\n[{i}/{len(services_to_restart)}] Processing {svc}...")
-        
+
         # Stop the service if running
         if is_service_running(svc):
             stop_service(svc)
             # Wait for port to clear
             if not wait_for_service_shutdown(svc):
                 click.secho(f"⚠ {svc} did not stop cleanly, but continuing...", fg="yellow")
-        
+
         # Start the service
         start_service(svc)
-        
+
         # Add delay before starting next service (except for the last one)
         if i < len(services_to_restart):
             click.echo(f"⏳ Waiting {startup_delay}s before starting next service...")
             time.sleep(startup_delay)
-    
+
     click.echo("\n" + "-" * 60)
     click.secho("✓ Service startup sequence complete!", fg="green")

@@ -1100,4 +1100,4 @@ test = ["coverage", "pytest", "pytest-asyncio", "pytest-benchmark", "pytest-mock
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "0c72888bfb3168f560beea4a7eeba328a130cbcb97ea67c11db0f93d311a6941"
+content-hash = "9df199106586eb52f20cc952af7850b5e7ee2a03d66d713272fb9b4e0252e7e0"

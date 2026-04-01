@@ -67,6 +67,12 @@ st.markdown("---")
 st.subheader("📝 Crea il tuo account")
 st.caption("Compila il modulo per registrarti come nuovo studente")
 
+# Initialize session state for form handling
+if "signup_error" not in st.session_state:
+    st.session_state.signup_error = None
+if "signup_error_student_id" not in st.session_state:
+    st.session_state.signup_error_student_id = None
+
 with st.form("signup_form", border=True):
     # Email / Student ID
     student_id = st.text_input(
@@ -128,14 +134,12 @@ with st.form("signup_form", border=True):
 
                 if existing is not None:
                     logger.warning(f"❌ Student already exists: {student_id}")
-                    st.error(f"❌ Questo account esiste già!")
-                    st.info(f"💡 Usa l'email **{student_id}** per accedere")
-                    if st.button("🔐 Vai al Login", use_container_width=True):
-                        logger.info("→ Redirecting to login page")
-                        st.switch_page("pages/01_login.py")
-                    st.stop()
 
-                logger.info(f"✓ Student does not exist yet - proceeding with creation")
+                    st.session_state.signup_error = "exists"
+                    st.session_state.signup_error_student_id = student_id
+                    st.rerun()
+
+                logger.info("✓ Student does not exist yet - proceeding with creation")
 
                 # Create new student
                 logger.info(f"➕ Creating new student: {student_id}")
@@ -145,21 +149,19 @@ with st.form("signup_form", border=True):
                 # Fetch the created profile
                 logger.info(f"📥 Fetching created profile: {student_id}")
                 profile = api.get_student(student_id)
-                logger.info(
-                    f"✓ Profile retrieved | Name: {profile.get('name', 'N/A')}"
-                )
+                logger.info(f"✓ Profile retrieved | Name: {profile.get('name', 'N/A')}")
 
                 if profile is None:
                     logger.error(f"❌ Failed to retrieve profile after creation: {student_id}")
-                    st.error("❌ Errore: non riesco a recuperare il tuo profilo")
-                    st.info("💡 Per favore, torna alla pagina di login e prova di nuovo")
-                    if st.button("🔐 Vai al Login", use_container_width=True):
-                        logger.info("→ Redirecting to login page")
-                        st.switch_page("pages/01_login.py")
-                    st.stop()
+
+                    st.session_state.signup_error = "profile_retrieval_failed"
+                    st.session_state.signup_error_student_id = student_id
+                    st.rerun()
 
                 # Set authenticated state
                 st.session_state.authenticated = True
+                st.session_state.signup_error = None
+                st.session_state.signup_error_student_id = None
                 st.session_state.student_id = student_id
                 st.session_state.profile = profile
                 logger.info(
@@ -171,7 +173,7 @@ with st.form("signup_form", border=True):
                 st.success("✅ Account creato con successo!")
                 st.balloons()
                 st.markdown(f"### Benvenuto, {name}! 👋")
-                st.info(f"Il tuo account è pronto. Reindirizzamento al dashboard...")
+                st.info("Il tuo account è pronto. Reindirizzamento al dashboard...")
                 logger.info("⏳ Waiting before redirect to dashboard")
                 time.sleep(2)
                 logger.info("→ SWITCHING to dashboard page")
@@ -184,20 +186,42 @@ with st.form("signup_form", border=True):
                 )
 
                 if "already exists" in error_msg.lower():
-                    st.error(f"❌ Questo account esiste già!")
-                    st.info(f"💡 Usa l'email **{student_id}** per accedere alla pagina di login")
+                    st.session_state.signup_error = "exists"
+                    st.session_state.signup_error_student_id = student_id
+                    st.rerun()
                 else:
-                    st.error(f"❌ Errore durante la creazione dell'account")
+                    st.error("❌ Errore durante la creazione dell'account")
                     st.caption(f"Dettagli: {error_msg}")
                 st.stop()
 
+# === HANDLE ERRORS OUTSIDE FORM ===
+if st.session_state.signup_error == "exists":
+    st.error("❌ Questo account esiste già!")
+    st.info(f"💡 Usa l'email **{st.session_state.signup_error_student_id}** per accedere")
+    if st.button("🔐 Vai al Login", use_container_width=True):
+        logger.info("→ Redirecting to login page")
+        st.session_state.signup_error = None
+        st.session_state.signup_error_student_id = None
+        st.switch_page("pages/01_login.py")
+elif st.session_state.signup_error == "profile_retrieval_failed":
+    st.error("❌ Errore: non riesco a recuperare il tuo profilo")
+    st.info("💡 Per favore, torna alla pagina di login e prova di nuovo")
+    if st.button("🔐 Vai al Login", use_container_width=True):
+        logger.info("→ Redirecting to login page")
+        st.session_state.signup_error = None
+        st.session_state.signup_error_student_id = None
+        st.switch_page("pages/01_login.py")
+
 # === LOGIN LINK ===
 st.divider()
-st.markdown("""
+st.markdown(
+    """
 <div style='text-align: center;'>
     <p style='color: gray;'>Hai già un account?</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 if st.button("🔐 Accedi", use_container_width=True, type="secondary"):
     logger.info("→ User clicked login link - redirecting to login page")

@@ -130,9 +130,9 @@ def kg():
 @kg.command("summary")
 def kg_summary():
     """Show counts of nodes and relationships in the graph."""
-    from italianollama.memory.neo4j_client import Neo4jClient
     from italianollama.api.config import get_settings
-    
+    from italianollama.memory.neo4j_client import Neo4jClient
+
     settings = get_settings()
 
     async def get_summary():
@@ -140,27 +140,31 @@ def kg_summary():
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
             password=settings.neo4j_password,
-            database=settings.neo4j_database
+            database=settings.neo4j_database,
         )
         await client.connect()
         async with client._driver.session(database=client.database) as session:
             # Count nodes by label
-            node_counts = await session.run("MATCH (n) RETURN labels(n)[0] AS label, count(*) AS count")
+            node_counts = await session.run(
+                "MATCH (n) RETURN labels(n)[0] AS label, count(*) AS count"
+            )
             # Count rels by type
-            rel_counts = await session.run("MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS count")
-            
+            rel_counts = await session.run(
+                "MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS count"
+            )
+
             nodes = await node_counts.data()
             rels = await rel_counts.data()
             return nodes, rels
 
     nodes, rels = asyncio.run(get_summary())
-    
+
     click.secho("\n--- Node Summary ---", fg="cyan", bold=True)
     if not nodes:
         click.echo("No nodes found.")
     for n in nodes:
         click.echo(f"  {n['label'] or 'Unlabeled'}: {n['count']}")
-        
+
     click.secho("\n--- Relationship Summary ---", fg="magenta", bold=True)
     if not rels:
         click.echo("No relationships found.")
@@ -173,9 +177,10 @@ def kg_summary():
 @click.argument("cypher")
 def kg_query(cypher):
     """Execute a raw Cypher query and show JSON results."""
-    from italianollama.memory.neo4j_client import Neo4jClient
-    from italianollama.api.config import get_settings
     import json
+
+    from italianollama.api.config import get_settings
+    from italianollama.memory.neo4j_client import Neo4jClient
 
     settings = get_settings()
 
@@ -184,7 +189,7 @@ def kg_query(cypher):
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
             password=settings.neo4j_password,
-            database=settings.neo4j_database
+            database=settings.neo4j_database,
         )
         await client.connect()
         async with client._driver.session(database=client.database) as session:
@@ -203,18 +208,18 @@ def kg_query(cypher):
 @click.option("--limit", "-n", default=20, help="Max nodes to show")
 def kg_list_nodes(label, limit):
     """List nodes in the graph."""
-    from italianollama.memory.neo4j_client import Neo4jClient
     from italianollama.api.config import get_settings
-    
+    from italianollama.memory.neo4j_client import Neo4jClient
+
     settings = get_settings()
     query = f"MATCH (n{':' + label if label else ''}) RETURN n LIMIT {limit}"
-    
+
     async def get_nodes():
         client = Neo4jClient(
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
             password=settings.neo4j_password,
-            database=settings.neo4j_database
+            database=settings.neo4j_database,
         )
         await client.connect()
         async with client._driver.session(database=client.database) as session:
@@ -237,18 +242,18 @@ def kg_list_nodes(label, limit):
 @click.option("--limit", "-n", default=20, help="Max relationships to show")
 def kg_list_rels(rel_type, limit):
     """List relationships in the graph."""
-    from italianollama.memory.neo4j_client import Neo4jClient
     from italianollama.api.config import get_settings
-    
+    from italianollama.memory.neo4j_client import Neo4jClient
+
     settings = get_settings()
     query = f"MATCH (s)-[r{':' + rel_type if rel_type else ''}]->(t) RETURN s, r, t LIMIT {limit}"
-    
+
     async def get_rels():
         client = Neo4jClient(
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
             password=settings.neo4j_password,
-            database=settings.neo4j_database
+            database=settings.neo4j_database,
         )
         await client.connect()
         async with client._driver.session(database=client.database) as session:
@@ -264,10 +269,13 @@ def kg_list_rels(rel_type, limit):
     for s, r, t in rels:
         s_label = list(s.labels)[0] if s.labels else "Node"
         t_label = list(t.labels)[0] if t.labels else "Node"
-        click.echo(f"({s_label} {s.get('student_id') or s.element_id}) -[:{r.type}]-> ({t_label} {t.get('word') or t.get('code') or t.element_id})")
+        click.echo(
+            f"({s_label} {s.get('student_id') or s.element_id}) -[:{r.type}]-> ({t_label} {t.get('word') or t.get('code') or t.element_id})"
+        )
 
 
 # ============ Service Management ============
+
 
 @cli.group()
 def service():
@@ -280,11 +288,13 @@ def service():
 def service_start(name):
     """Start services (api, chainlit, streamlit, or all)."""
     from italianollama.cli.services import start_service
+
     if name == "all":
         for svc in ["api", "chainlit", "streamlit"]:
             start_service(svc)
             import time
-            time.sleep(1) # Small pause to let ports bind
+
+            time.sleep(1)  # Small pause to let ports bind
     else:
         start_service(name)
 
@@ -294,6 +304,7 @@ def service_start(name):
 def service_stop(name):
     """Stop services (api, chainlit, streamlit, or all)."""
     from italianollama.cli.services import stop_service
+
     if name == "all":
         for svc in ["api", "chainlit", "streamlit"]:
             stop_service(svc)
@@ -306,10 +317,15 @@ def service_stop(name):
 @click.option("--delay", type=int, default=15, help="Delay (seconds) between service startups")
 def service_restart(name, delay):
     """Restart services with sequential startup and configurable delay."""
-    from italianollama.cli.services import restart_services_sequentially, is_service_running, start_service, stop_service
-    
+    from italianollama.cli.services import (
+        is_service_running,
+        restart_services_sequentially,
+        start_service,
+        stop_service,
+    )
+
     names = ["api", "chainlit", "streamlit"] if name == "all" else [name]
-    
+
     if len(names) == 1:
         # Single service: use old logic (no delay)
         svc = names[0]
@@ -318,6 +334,7 @@ def service_restart(name, delay):
             # Wait for port to clear
             for _ in range(5):
                 import time
+
                 time.sleep(1)
                 if not is_service_running(svc):
                     break
@@ -331,6 +348,7 @@ def service_restart(name, delay):
 def service_status():
     """Show current status of all services."""
     from italianollama.cli.services import get_status
+
     get_status()
 
 
@@ -341,15 +359,16 @@ def service_status():
 def service_logs(name, lines, follow):
     """Show logs for a specific service."""
     import subprocess
+
     log_file = f"logs/{name}.log"
     if not os.path.exists(log_file):
         click.secho(f"⚠ Log file {log_file} not found.", fg="yellow")
         return
-    
+
     cmd = ["tail", f"-n{lines}", log_file]
     if follow:
         cmd.insert(1, "-f")
-    
+
     try:
         subprocess.run(cmd)
     except KeyboardInterrupt:
