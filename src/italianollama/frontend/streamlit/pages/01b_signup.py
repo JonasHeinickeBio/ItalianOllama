@@ -32,13 +32,13 @@ logging.getLogger("watchdog").setLevel(logging.WARNING)
 logging.getLogger("inotify_simple").setLevel(logging.WARNING)
 
 logger.info("=" * 100)
-logger.info("📝 SIGNUP PAGE INITIALIZATION STARTED")
+logger.info("📝 SIGNUP PAGE INITIALIZED")
 logger.info("=" * 100)
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="ItalianOllama - Registrazione",
-    page_icon="📝",
+    page_title="ItalianOllama - Signup",
+    page_icon="🇮🇹",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
@@ -48,13 +48,10 @@ logger.info("✓ Page configuration set")
 # --- Initialize Session State ---
 logger.info("🔄 Initializing session state variables...")
 initialize_session_state()
-logger.info(
-    f"✓ Session initialized | authenticated={st.session_state.authenticated} | student_id={st.session_state.student_id}"
-)
 
 # === MAIN PAGE ===
-st.title("Registrazione - ItalianOllama 🇮🇹")
-st.markdown("### Crea il tuo account per iniziare ad imparare l'italiano")
+st.title("ItalianOllama 🇮🇹")
+st.markdown("### Comincia il tuo percorso di apprendimento dell'italiano!")
 
 # Health check
 logger.info("📡 Performing backend health check...")
@@ -65,79 +62,102 @@ if not check_backend_health():
 
 logger.info("✓ Backend health check PASSED")
 
-# Signup form
+# === SIGNUP SECTION ===
+st.markdown("---")
+st.subheader("📝 Crea il tuo account")
+st.caption("Compila il modulo per registrarti come nuovo studente")
+
 with st.form("signup_form", border=True):
-    st.subheader("📋 Crea il tuo Account")
-    
+    # Email / Student ID
     student_id = st.text_input(
-        "ID Studente",
-        placeholder="mario.rossi@example.com",
-        help="Usa un email o ID univoco che ricorderai facilmente",
+        "Email o ID studente",
+        placeholder="mario.rossi@email.com",
+        help="Usa una email valida o un ID univoco che ricorderai facilmente",
     )
     
+    # Full name
     name = st.text_input(
-        "Nome",
+        "Nome completo",
         placeholder="Mario Rossi",
-        help="Inserisci il tuo nome completo",
+        help="Inserisci il tuo nome",
     )
     
+    # Native language (optional)
     native_language = st.selectbox(
-        "Lingua Madre",
-        options=["English", "Spanish", "French", "German", "Italian", "Portuguese", "Other"],
+        "Lingua madre",
+        ["English", "German", "French", "Spanish", "Italian", "Portuguese", "Other"],
         index=0,
-        help="Qual è la tua lingua madre?",
+        help="Seleziona la tua lingua madre",
     )
     
-    submit = st.form_submit_button("✅ Registrati", use_container_width=True)
+    submit = st.form_submit_button("✅ Crea Account", use_container_width=True, type="primary")
 
     if submit:
+        # Validation
+        errors = []
+        
         if not student_id or not student_id.strip():
-            logger.warning("⚠️ Form submitted with empty student_id")
-            st.warning("⚠️ Per favore inserisci un ID studente")
-            st.stop()
-
+            errors.append("🔍 Email o ID studente è obbligatorio")
+        elif len(student_id.strip()) < 3:
+            errors.append("🔍 Email o ID deve avere almeno 3 caratteri")
+        
         if not name or not name.strip():
-            logger.warning("⚠️ Form submitted with empty name")
-            st.warning("⚠️ Per favore inserisci il tuo nome")
+            errors.append("👤 Nome completo è obbligatorio")
+        elif len(name.strip()) < 2:
+            errors.append("👤 Nome deve avere almeno 2 caratteri")
+        
+        if errors:
+            logger.warning(f"❌ Validation errors: {errors}")
+            for error in errors:
+                st.error(error)
             st.stop()
 
-        logger.info(f"📝 Signup attempt started for student_id: {student_id}, name: {name}")
+        student_id = student_id.strip()
+        name = name.strip()
+        logger.info(f"📝 Signup attempt for: student_id={student_id}, name={name}")
 
-        with st.spinner("Creazione account in corso..."):
+        with st.spinner("Creazione del tuo account..."):
             logger.info("📡 Getting API client...")
             api = get_api_client()
             logger.info("✓ API client obtained")
 
             try:
+                # Check if student already exists
+                logger.info(f"🔍 Checking if student already exists: {student_id}")
+                existing = api.get_student(student_id)
+                
+                if existing is not None:
+                    logger.warning(f"❌ Student already exists: {student_id}")
+                    st.error(f"❌ Questo account esiste già!")
+                    st.info(f"💡 Usa l'email **{student_id}** per accedere")
+                    if st.button("🔐 Vai al Login", use_container_width=True):
+                        logger.info("→ Redirecting to login page")
+                        st.switch_page("pages/01_login.py")
+                    st.stop()
+
+                logger.info(f"✓ Student does not exist yet - proceeding with creation")
+
                 # Create new student
-                logger.info(f"👤 Creating new student - student_id={student_id}, name={name}, native_language={native_language}")
-                profile = api.create_student(
-                    student_id=student_id,
-                    name=name,
-                    native_language=native_language,
-                )
+                logger.info(f"➕ Creating new student: {student_id}")
+                result = api.create_student(student_id, name, native_language)
+                logger.info(f"✓ api.create_student() returned: {type(result)}")
+
+                # Fetch the created profile
+                logger.info(f"📥 Fetching created profile: {student_id}")
+                profile = api.get_student(student_id)
                 logger.info(
-                    f"✓ api.create_student() returned: {type(profile)} | Keys: {list(profile.keys()) if profile else 'None'}"
+                    f"✓ Profile retrieved | Name: {profile.get('name', 'N/A')}"
                 )
 
                 if profile is None:
-                    logger.error(f"❌ Failed to create student: {student_id}")
-                    st.error("❌ Errore durante la creazione dell'account. Per favore riprova.")
+                    logger.error(f"❌ Failed to retrieve profile after creation: {student_id}")
+                    st.error("❌ Errore: non riesco a recuperare il tuo profilo")
+                    st.info("💡 Per favore, torna alla pagina di login e prova di nuovo")
+                    if st.button("🔐 Vai al Login", use_container_width=True):
+                        logger.info("→ Redirecting to login page")
+                        st.switch_page("pages/01_login.py")
                     st.stop()
 
-                logger.info(f"✓ Student created successfully | student_id: {student_id}")
-                
-                # Auto-login the new student
-                logger.info(f"🔐 Auto-logging in new student: {student_id}")
-                login_result = api.login(student_id)
-                
-                if not login_result:
-                    logger.error(f"❌ Auto-login failed for new student: {student_id}")
-                    st.error("Account creato! Per favore accedi con il tuo ID.")
-                    st.stop()
-
-                logger.info("✓ Auto-login successful!")
-                
                 # Set authenticated state
                 st.session_state.authenticated = True
                 st.session_state.student_id = student_id
@@ -145,6 +165,43 @@ with st.form("signup_form", border=True):
                 logger.info(
                     f"✓ Session state updated | authenticated=True | student_id={student_id}"
                 )
+
+                # Show success message
+                logger.info("🎉 Signup successful!")
+                st.success("✅ Account creato con successo!")
+                st.balloons()
+                st.markdown(f"### Benvenuto, {name}! 👋")
+                st.info(f"Il tuo account è pronto. Reindirizzamento al dashboard...")
+                logger.info("⏳ Waiting before redirect to dashboard")
+                time.sleep(2)
+                logger.info("→ SWITCHING to dashboard page")
+                st.switch_page("pages/02_dashboard.py")
+
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(
+                    f"❌ Exception during signup: {type(e).__name__}: {error_msg}", exc_info=True
+                )
+                
+                if "already exists" in error_msg.lower():
+                    st.error(f"❌ Questo account esiste già!")
+                    st.info(f"💡 Usa l'email **{student_id}** per accedere alla pagina di login")
+                else:
+                    st.error(f"❌ Errore durante la creazione dell'account")
+                    st.caption(f"Dettagli: {error_msg}")
+                st.stop()
+
+# === LOGIN LINK ===
+st.divider()
+st.markdown("""
+<div style='text-align: center;'>
+    <p style='color: gray;'>Hai già un account?</p>
+</div>
+""", unsafe_allow_html=True)
+
+if st.button("🔐 Accedi", use_container_width=True, type="secondary"):
+    logger.info("→ User clicked login link - redirecting to login page")
+    st.switch_page("pages/01_login.py")
 
                 # Show success and redirect
                 logger.info("🎉 Signup complete! Showing success message...")
