@@ -159,7 +159,7 @@ services:
   # Neo4j - Graph Database (Optional, Local)
   # ============================================
   neo4j:
-    image: neo4j:5.15-community
+    image: neo4j:latest
     container_name: italian-tutor-neo4j
     profiles: ["neo4j"]
 

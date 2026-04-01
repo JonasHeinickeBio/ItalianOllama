@@ -117,7 +117,9 @@ with st.form("login_form", border=True):
                     st.info("💡 Hai due opzioni:")
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.markdown("1. **Verifica il tuo ID** - Controlla l'email di registrazione")
+                        st.markdown(
+                            "1. **Verifica il tuo ID** - Controlla l'email di registrazione"
+                        )
                     with col2:
                         st.markdown("2. **Registrati come nuovo** - Crea un nuovo account")
                     st.stop()
@@ -148,24 +150,27 @@ with st.form("login_form", border=True):
                 logger.error(
                     f"❌ Exception during login: {type(e).__name__}: {error_msg}", exc_info=True
                 )
-                
+
                 # Check if it's a 404 not found error
                 if "not found" in error_msg.lower() or "404" in error_msg:
                     st.error(f"❌ Studente non trovato: **{student_id}**")
                     st.warning("Questo ID studente non esiste nel sistema.")
                 else:
-                    st.error(f"❌ Errore tecnico durante l'accesso")
+                    st.error("❌ Errore tecnico durante l'accesso")
                     st.caption(f"Dettagli: {error_msg}")
                 st.stop()
 
 # === SIGNUP SECTION ===
 st.divider()
-st.markdown("""
+st.markdown(
+    """
 <div style='text-align: center;'>
     <h3>👤 Non hai ancora un account?</h3>
     <p style='color: gray;'>Crea un nuovo account per iniziare le lezioni</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 if st.button("📝 Registrati Ora", use_container_width=True, type="secondary"):
     logger.info("→ User clicked signup button - redirecting to signup page")

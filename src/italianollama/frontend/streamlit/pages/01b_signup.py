@@ -74,14 +74,14 @@ with st.form("signup_form", border=True):
         placeholder="mario.rossi@email.com",
         help="Usa una email valida o un ID univoco che ricorderai facilmente",
     )
-    
+
     # Full name
     name = st.text_input(
         "Nome completo",
         placeholder="Mario Rossi",
         help="Inserisci il tuo nome",
     )
-    
+
     # Native language (optional)
     native_language = st.selectbox(
         "Lingua madre",
@@ -89,23 +89,23 @@ with st.form("signup_form", border=True):
         index=0,
         help="Seleziona la tua lingua madre",
     )
-    
+
     submit = st.form_submit_button("✅ Crea Account", use_container_width=True, type="primary")
 
     if submit:
         # Validation
         errors = []
-        
+
         if not student_id or not student_id.strip():
             errors.append("🔍 Email o ID studente è obbligatorio")
         elif len(student_id.strip()) < 3:
             errors.append("🔍 Email o ID deve avere almeno 3 caratteri")
-        
+
         if not name or not name.strip():
             errors.append("👤 Nome completo è obbligatorio")
         elif len(name.strip()) < 2:
             errors.append("👤 Nome deve avere almeno 2 caratteri")
-        
+
         if errors:
             logger.warning(f"❌ Validation errors: {errors}")
             for error in errors:
@@ -125,7 +125,7 @@ with st.form("signup_form", border=True):
                 # Check if student already exists
                 logger.info(f"🔍 Checking if student already exists: {student_id}")
                 existing = api.get_student(student_id)
-                
+
                 if existing is not None:
                     logger.warning(f"❌ Student already exists: {student_id}")
                     st.error(f"❌ Questo account esiste già!")
@@ -182,7 +182,7 @@ with st.form("signup_form", border=True):
                 logger.error(
                     f"❌ Exception during signup: {type(e).__name__}: {error_msg}", exc_info=True
                 )
-                
+
                 if "already exists" in error_msg.lower():
                     st.error(f"❌ Questo account esiste già!")
                     st.info(f"💡 Usa l'email **{student_id}** per accedere alla pagina di login")
@@ -203,45 +203,19 @@ if st.button("🔐 Accedi", use_container_width=True, type="secondary"):
     logger.info("→ User clicked login link - redirecting to login page")
     st.switch_page("pages/01_login.py")
 
-                # Show success and redirect
-                logger.info("🎉 Signup complete! Showing success message...")
-                st.success("✅ Account creato con successo!")
-                st.balloons()
-                logger.info("⏳ Waiting 1 second before redirect...")
-                time.sleep(1)
-                logger.info("→ REDIRECTING to dashboard...")
-                st.switch_page("pages/02_dashboard.py")
-
-            except Exception as e:
-                logger.error(
-                    f"❌ Exception during signup: {type(e).__name__}: {str(e)}", exc_info=True
-                )
-                st.error(f"❌ Errore durante la registrazione: {str(e)}")
-                st.stop()
-
-# Back to login
-st.divider()
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.info("🔐 Hai già un account?")
-with col2:
-    if st.button("Accedi", use_container_width=True, key="login_btn"):
-        logger.info("→ REDIRECTING to login page...")
-        st.switch_page("pages/01_login.py")
-
-# Footer
+# === FOOTER ===
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: gray; font-size: 0.8em;'>
     <p>ItalianOllama © 2024 | Powered by LangGraph & Neo4j</p>
     <p>
-        <a href="https://github.com/JonasHeinickeBio/ItalianOllama" style="color: gray; text-decoration: none;">
-            📚 Source Code
+        <a href="https://github.com/JonasHeinickeBio/ItalianOllama" style="color: gray; text-decoration: none; margin: 0 10px;">
+            📚 Source
         </a>
         |
-        <a href="https://italianollama.com/docs" style="color: gray; text-decoration: none;">
-            📖 Documentation
+        <a href="https://italianollama.com/docs" style="color: gray; text-decoration: none; margin: 0 10px;">
+            📖 Docs
         </a>
     </p>
     </div>
