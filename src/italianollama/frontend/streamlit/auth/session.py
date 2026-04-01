@@ -1,16 +1,18 @@
-import streamlit as st
-import requests
+from datetime import datetime
+
 import jwt
-from datetime import datetime, timedelta
+import requests
+import streamlit as st
 
 BACKEND_URL = "http://localhost:8000"
+
 
 def require_student():
     """Verify student is authenticated via JWT stored in session state."""
     if "student_id" not in st.session_state or "access_token" not in st.session_state:
         st.info("Please login to continue")
         st.stop()
-        
+
     # Optional: Verify token expiration
     try:
         token = st.session_state.access_token
@@ -22,16 +24,14 @@ def require_student():
     except Exception:
         st.error("Invalid session. Please login again.")
         st.stop()
-        
+
     return st.session_state.student_id, st.session_state.access_token
+
 
 def login_student(student_id):
     """Call backend to get JWT and store in session."""
     try:
-        response = requests.post(
-            f"{BACKEND_URL}/auth/token",
-            json={"student_id": student_id}
-        )
+        response = requests.post(f"{BACKEND_URL}/auth/token", json={"student_id": student_id})
         if response.status_code == 200:
             data = response.json()
             st.session_state.access_token = data["access_token"]
@@ -43,6 +43,7 @@ def login_student(student_id):
     except Exception as e:
         st.error(f"Connection error: {e}")
         return False
+
 
 def logout_student():
     """Clear session state."""

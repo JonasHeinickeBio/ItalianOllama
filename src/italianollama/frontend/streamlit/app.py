@@ -1,8 +1,22 @@
-from auth.session import login_student
+import os
+
 import requests
 import streamlit as st
 
-BACKEND_URL = "http://localhost:8000"
+# Try to import config, fallback to defaults
+try:
+    from italianollama.frontend.config import get_settings
+
+    def get_backend_url() -> str:
+        settings = get_settings()
+        return settings.backend_url
+except ImportError:
+
+    def get_backend_url() -> str:
+        return os.getenv("BACKEND_URL", "http://localhost:8000")
+
+
+BACKEND_URL = get_backend_url()
 
 # --- Page Configuration ---
 st.set_page_config(

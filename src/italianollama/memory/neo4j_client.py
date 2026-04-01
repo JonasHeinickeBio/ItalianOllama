@@ -4,8 +4,11 @@ Handles all Neo4j operations for student data, vocabulary, and progress.
 """
 
 import json
+import logging
 
 from neo4j import AsyncGraphDatabase
+
+logger = logging.getLogger(__name__)
 
 
 class Neo4jClient:
@@ -26,38 +29,55 @@ class Neo4jClient:
         password: str = "",
         database: str = "neo4j",
     ):
+        logger.info(f"🗂️ Initializing Neo4j Client - uri={uri}, database={database}")
         self.uri = uri
         self.user = user
         self.password = password
         self.database = database
         self._driver = None
+        logger.debug("  ✓ Neo4j Client initialized")
 
     async def connect(self):
         """Connect to Neo4j."""
         if self._driver is None:
+            logger.info(f"🔗 Connecting to Neo4j - uri={self.uri}, user={self.user}")
             self._driver = AsyncGraphDatabase.driver(self.uri, auth=(self.user, self.password))
+            logger.info("✓ Connected to Neo4j successfully")
+        else:
+            logger.debug("  ℹ️ Already connected to Neo4j")
         return self
 
     async def close(self):
         """Close the connection."""
         if self._driver:
+            logger.info("🔌 Closing Neo4j connection...")
             await self._driver.close()
             self._driver = None
+            logger.info("✓ Neo4j connection closed")
+        else:
+            logger.debug("  ℹ️ No Neo4j connection to close")
 
     async def verify_connectivity(self) -> bool:
         """Verify connection is working."""
+        logger.debug("📡 Verifying Neo4j connectivity...")
         if not self._driver:
             await self.connect()
 
-        async with self._driver.session(database=self.database) as session:
-            result = await session.run("RETURN 1 AS n")
-            await result.consume()
-        return True
+        try:
+            async with self._driver.session(database=self.database) as session:
+                result = await session.run("RETURN 1 AS n")
+                await result.consume()
+            logger.info("✓ Neo4j connectivity verified successfully")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Neo4j connectivity verification failed - {str(e)}")
+            return False
 
     # ============ Student Management ============
 
     async def create_student(self, student_id: str, name: str) -> str:
         """Create a new student."""
+        logger.info(f"👤 Creating student in Neo4j - student_id={student_id}, name={name}")
         query = """
         MERGE (s:Student {student_id: $student_id})
         SET s.name = $name,
@@ -68,10 +88,13 @@ class Neo4jClient:
         async with self._driver.session(database=self.database) as session:
             result = await session.run(query, student_id=student_id, name=name)
             record = await result.single()
-            return record["id"] if record else None
+            student_id_neo4j = record["id"] if record else None
+            logger.info(f"✓ Student created in Neo4j - neo4j_id={student_id_neo4j}")
+            return student_id_neo4j
 
     async def get_student(self, student_id: str) -> dict | None:
         """Get student with level and stats."""
+        logger.debug(f"👤 Fetching student from Neo4j - student_id={student_id}")
         query = """
         MATCH (s:Student {student_id: $student_id})
         OPTIONAL MATCH (s)-[:HAS_LEVEL]->(l:CEFRLevel)
@@ -92,7 +115,14 @@ class Neo4jClient:
             record = await result.single()
 
             if record:
-                return dict(record)
+                student_data = dict(record)
+                logger.info(
+                    f"✓ Student retrieved from Neo4j - vocab_count={student_data.get('vocab_count', 0)}, exercise_count={student_data.get('exercise_count', 0)}"
+                )
+                logger.debug(f"  📥 Student data: {student_data}")
+                return student_data
+            else:
+                logger.warning(f"⚠️ Student not found in Neo4j - student_id={student_id}")
             return None
 
     async def set_student_level(
@@ -102,6 +132,9 @@ class Neo4jClient:
         confidence: float = 1.0,
     ):
         """Set or update student's CEFR level."""
+        logger.info(
+            f"📊 Setting student CEFR level - student_id={student_id}, level={level}, confidence={confidence}"
+        )
         query = """
         MERGE (s:Student {student_id: $student_id})
         MERGE (l:CEFRLevel {code: $level})
@@ -117,6 +150,7 @@ class Neo4jClient:
                 level=level,
                 confidence=confidence,
             )
+        logger.info("✓ Student CEFR level set successfully")
 
     # ============ Vocabulary ============
 
@@ -129,6 +163,9 @@ class Neo4jClient:
         level: str = "A1",
     ):
         """Add vocabulary word for student."""
+        logger.info(
+            f"📚 Adding vocabulary to student - word='{word}' | translation='{translation}' | topic={topic} | level={level}"
+        )
         query = """
         MERGE (s:Student {student_id: $student_id})
         MERGE (v:Vocabulary {word: $word, language: 'italian'})
@@ -149,6 +186,7 @@ class Neo4jClient:
                 topic=topic,
                 level=level,
             )
+        logger.info("✓ Vocabulary added successfully")
 
     async def get_student_vocabulary(
         self,
@@ -156,6 +194,9 @@ class Neo4jClient:
         limit: int = 20,
     ) -> list[dict]:
         """Get student's vocabulary with confidence scores."""
+        logger.debug(
+            f"📚 Fetching student vocabulary from Neo4j - student_id={student_id}, limit={limit}"
+        )
         query = """
         MATCH (s:Student {student_id: $student_id})-[:KNOWS]->(v:Vocabulary)
         RETURN v.word AS word,
@@ -169,6 +210,8 @@ class Neo4jClient:
         async with self._driver.session(database=self.database) as session:
             result = await session.run(query, student_id=student_id, limit=limit)
             records = await result.data()
+            logger.info(f"✓ Retrieved {len(records)} vocabulary entries")
+            logger.debug(f"  📥 Sample entries: {records[:3] if records else 'none'}")
             return records
 
     async def update_vocabulary_confidence(
@@ -178,6 +221,9 @@ class Neo4jClient:
         confidence: float,
     ):
         """Update confidence score for vocabulary (spaced repetition)."""
+        logger.info(
+            f"📝 Updating vocabulary confidence - word='{word}' | confidence={confidence}%"
+        )
         query = """
         MATCH (s:Student {student_id: $student_id})-[:KNOWS]->(v:Vocabulary {word: $word})
         SET v.confidence = $confidence,
@@ -191,6 +237,7 @@ class Neo4jClient:
                 word=word,
                 confidence=confidence,
             )
+        logger.info("✓ Vocabulary confidence updated successfully")
 
     # ============ Grammar Errors ============
 
@@ -203,6 +250,9 @@ class Neo4jClient:
         level: str = "A2",
     ):
         """Record a grammar error for tracking."""
+        logger.info(
+            f"❌ Recording grammar error - rule={rule} | original='{original[:30]}' | corrected='{corrected[:30]}'"
+        )
         query = """
         MERGE (s:Student {student_id: $student_id})
         MERGE (e:GrammarError {
@@ -225,6 +275,7 @@ class Neo4jClient:
                 rule=rule,
                 level=level,
             )
+        logger.info("✓ Grammar error recorded successfully")
 
     async def get_common_errors(
         self,
@@ -232,6 +283,7 @@ class Neo4jClient:
         limit: int = 10,
     ) -> list[dict]:
         """Get most common grammar errors for student."""
+        logger.debug(f"❌ Fetching common grammar errors - student_id={student_id}, limit={limit}")
         query = """
         MATCH (s:Student {student_id: $student_id})-[:MADE_ERROR]->(e:GrammarError)
         RETURN e.rule AS rule,
@@ -244,7 +296,10 @@ class Neo4jClient:
 
         async with self._driver.session(database=self.database) as session:
             result = await session.run(query, student_id=student_id, limit=limit)
-            return await result.data()
+            records = await result.data()
+            logger.info(f"✓ Retrieved {len(records)} common grammar errors")
+            logger.debug(f"  📥 Top error: {records[0] if records else 'none'}")
+            return records
 
     # ============ Exercises ============
 
@@ -257,6 +312,9 @@ class Neo4jClient:
         content: str | None = None,
     ):
         """Record completed exercise."""
+        logger.info(
+            f"📝 Recording exercise - student_id={student_id}, type={exercise_type}, score={score}, level={level}"
+        )
         query = """
         MATCH (s:Student {student_id: $student_id})
         CREATE (e:Exercise {
@@ -278,6 +336,7 @@ class Neo4jClient:
                 level=level,
                 content=content,
             )
+        logger.info("✓ Exercise recorded successfully")
 
     async def get_exercise_history(
         self,
@@ -285,6 +344,7 @@ class Neo4jClient:
         limit: int = 20,
     ) -> list[dict]:
         """Get student's exercise history."""
+        logger.debug(f"📚 Fetching exercise history - student_id={student_id}, limit={limit}")
         query = """
         MATCH (s:Student {student_id: $student_id})-[:COMPLETED]->(e:Exercise)
         RETURN e.type AS type,
@@ -297,16 +357,19 @@ class Neo4jClient:
 
         async with self._driver.session(database=self.database) as session:
             result = await session.run(query, student_id=student_id, limit=limit)
-            return await result.data()
+            records = await result.data()
+            logger.info(f"✓ Retrieved {len(records)} exercise history records")
+            return records
 
     async def get_student_stats(self, student_id: str) -> dict:
         """Get aggregated stats for dashboard KPI metrics."""
+        logger.debug(f"📊 Fetching aggregated student stats - student_id={student_id}")
         query = """
         MATCH (s:Student {student_id: $student_id})
         OPTIONAL MATCH (s)-[:COMPLETED]->(e:Exercise)
         OPTIONAL MATCH (s)-[:KNOWS]->(v:Vocabulary)
         OPTIONAL MATCH (s)-[:MADE_ERROR]->(err:GrammarError)
-        WITH s, 
+        WITH s,
              count(DISTINCT e) AS total_exercises,
              avg(e.score) AS avg_score,
              count(DISTINCT v) AS total_vocab,
@@ -320,10 +383,16 @@ class Neo4jClient:
         async with self._driver.session(database=self.database) as session:
             result = await session.run(query, student_id=student_id)
             record = await result.single()
-            return dict(record) if record else {}
+            stats = dict(record) if record else {}
+            logger.info(
+                f"✓ Student stats retrieved - exercises={stats.get('total_exercises', 0)}, vocab={stats.get('total_vocab', 0)}, errors={stats.get('total_errors', 0)}"
+            )
+            logger.debug(f"  📊 Stats: {stats}")
+            return stats
 
     async def get_test_readiness(self, student_id: str) -> list[dict]:
         """Get CEFR test readiness scores for radar chart."""
+        logger.debug(f"📈 Fetching test readiness data - student_id={student_id}")
         query = """
         MATCH (s:Student {student_id: $student_id})
         OPTIONAL MATCH (s)-[:READY_FOR]->(t:NiveauTest)
@@ -334,7 +403,9 @@ class Neo4jClient:
         """
         async with self._driver.session(database=self.database) as session:
             result = await session.run(query, student_id=student_id)
-            return await result.data()
+            records = await result.data()
+            logger.info(f"✓ Retrieved {len(records)} test readiness records")
+            return records
 
     async def get_full_knowledge_graph(self, student_id: str) -> dict:
         """Get nodes and relationships for st-link-analysis."""
@@ -348,28 +419,32 @@ class Neo4jClient:
             nodes = []
             links = []
             node_ids = set()
-            
+
             async for record in result:
                 s = record["s"]
                 target = record["target"]
                 r = record["r"]
-                
+
                 for node in [s, target]:
                     if node.element_id not in node_ids:
-                        nodes.append({
-                            "id": node.element_id,
-                            "label": list(node.labels)[0],
-                            "properties": dict(node)
-                        })
+                        nodes.append(
+                            {
+                                "id": node.element_id,
+                                "label": list(node.labels)[0],
+                                "properties": dict(node),
+                            }
+                        )
                         node_ids.add(node.element_id)
-                
-                links.append({
-                    "id": r.element_id,
-                    "source": s.element_id,
-                    "target": target.element_id,
-                    "type": r.type
-                })
-            
+
+                links.append(
+                    {
+                        "id": r.element_id,
+                        "source": s.element_id,
+                        "target": target.element_id,
+                        "type": r.type,
+                    }
+                )
+
             return {"nodes": nodes, "links": links}
 
     # ============ Niveau Test ============

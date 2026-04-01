@@ -170,19 +170,21 @@ async def health(request: Request):
     except Exception as e:
         logger.warning(f"Neo4j health check failed: {e}")
 
-    # Check LiteLLM
+    # Check LiteLLM (with shorter timeout)
     litellm_status = "unknown"
     try:
         import httpx
 
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:  # Reduced from 5s to 2s
             response = await client.get(f"{settings.litellm_base_url}/health")
             if response.status_code == 200:
                 litellm_status = "connected"
                 logger.debug("LiteLLM health check passed")
     except Exception as e:
         litellm_status = "unreachable"
-        logger.warning(f"LiteLLM health check failed: {e}")
+        logger.debug(
+            f"LiteLLM health check failed (non-critical): {e}"
+        )  # Changed from warning to debug
 
     return HealthResponse(
         status="ok" if neo4j_status == "connected" else "degraded",
