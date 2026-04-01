@@ -1,7 +1,18 @@
-"""FastAPI application - Italian Tutor Backend.
+"""FastAPI application - Italian Tutor Backend (Optimized).
 
 This module provides the REST API for the Italian Tutor application.
-It exposes endpoints for chat, student management, and health checks.
+It exposes endpoints for:
+- Chat: LangGraph-based conversational interface
+- Student Management: Registration and profile retrieval
+- Authentication: JWT token generation and verification
+- Learning Analytics: Velocity, skills, errors tracking
+- Recommendations: Personalized next-module suggestions
+- Health Checks: Neo4j and LiteLLM connectivity
+
+This is an optimized merge of main.py and main_enhanced.py, combining:
+- Stable core endpoints from main.py
+- Enhanced analytics from main_enhanced.py
+- Fixed endpoint definitions and proper request body handling
 """
 
 import logging
@@ -32,8 +43,8 @@ settings = get_settings()
 # Create FastAPI app
 app = FastAPI(
     title="Italian Tutor API",
-    description="AI-powered Italian language tutor with LangGraph",
-    version="0.2.0",
+    description="AI-powered Italian language tutor with LangGraph and semantic analytics",
+    version="0.3.0-optimized",
 )
 
 # ============ Middleware Stack ============
@@ -148,7 +159,7 @@ async def root(request: Request):
     logger.info("Root endpoint accessed")
     return {
         "name": "Italian Tutor API",
-        "version": "0.2.0",
+        "version": "0.3.0-optimized",
         "docs": "/docs",
         "request_id": getattr(request.state, "request_id", "unknown"),
     }
