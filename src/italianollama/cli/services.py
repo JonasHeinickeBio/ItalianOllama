@@ -113,7 +113,26 @@ def is_service_running(name):
     return proc is not None
 
 
+def wait_for_service_startup(name, max_wait=10):
+    """Wait for a service to become available (port listening)."""
+    for attempt in range(max_wait):
+        time.sleep(1)
+        if is_service_running(name):
+            return True
+    return False
+
+
+def wait_for_service_shutdown(name, max_wait=5):
+    """Wait for a service to shut down (port stops listening)."""
+    for attempt in range(max_wait):
+        time.sleep(1)
+        if not is_service_running(name):
+            return True
+    return False
+
+
 def start_service(name):
+    """Start a service and wait for it to be available."""
     services = get_services()
     proc, is_tunnel = get_process_by_port(services[name]["port"], services[name].get("keywords"))
     if proc:
@@ -143,19 +162,19 @@ def start_service(name):
     )
 
     # Wait for the port to actually open
-    for _ in range(10):
-        time.sleep(1)
-        if is_service_running(name):
-            click.secho(f"✓ {name} started successfully (PID: {process.pid})", fg="green")
-            return
-        if process.poll() is not None:
-            click.secho(f"✗ Failed to start {name}. Check logs/{name}.log", fg="red")
-            return
+    if wait_for_service_startup(name):
+        click.secho(f"✓ {name} started successfully (PID: {process.pid})", fg="green")
+        return
+
+    if process.poll() is not None:
+        click.secho(f"✗ Failed to start {name}. Check logs/{name}.log", fg="red")
+        return
 
     click.secho(
         f"⚠ {name} started (PID: {process.pid}), but port {svc['port']} is not yet listening.",
         fg="yellow",
     )
+
 
 
 def stop_service(name):
@@ -195,3 +214,41 @@ def get_status():
 
         click.echo(f"{name:12} | {status:25} | Port: {info['port']:5} {pid_info}")
     click.echo("-" * 60)
+
+
+def restart_services_sequentially(names, startup_delay=15):
+    """Restart services sequentially with timeout between each startup.
+    
+    Args:
+        names: List of service names to restart in order
+        startup_delay: Seconds to wait between service startups (default: 15)
+    """
+    # Define startup order: API → Streamlit → Chainlit
+    startup_order = ["api", "streamlit", "chainlit"]
+    
+    # Filter to requested services in startup order
+    services_to_restart = [s for s in startup_order if s in names]
+    
+    click.echo(f"\n📋 Restarting {len(services_to_restart)} services in sequence with {startup_delay}s delay...")
+    click.echo("-" * 60)
+    
+    for i, svc in enumerate(services_to_restart, 1):
+        click.echo(f"\n[{i}/{len(services_to_restart)}] Processing {svc}...")
+        
+        # Stop the service if running
+        if is_service_running(svc):
+            stop_service(svc)
+            # Wait for port to clear
+            if not wait_for_service_shutdown(svc):
+                click.secho(f"⚠ {svc} did not stop cleanly, but continuing...", fg="yellow")
+        
+        # Start the service
+        start_service(svc)
+        
+        # Add delay before starting next service (except for the last one)
+        if i < len(services_to_restart):
+            click.echo(f"⏳ Waiting {startup_delay}s before starting next service...")
+            time.sleep(startup_delay)
+    
+    click.echo("\n" + "-" * 60)
+    click.secho("✓ Service startup sequence complete!", fg="green")

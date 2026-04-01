@@ -303,13 +303,16 @@ def service_stop(name):
 
 @service.command("restart")
 @click.argument("name", type=click.Choice(["api", "chainlit", "streamlit", "all"]), default="all")
-def service_restart(name):
-    """Restart services."""
-    from italianollama.cli.services import stop_service, start_service, is_service_running
+@click.option("--delay", type=int, default=15, help="Delay (seconds) between service startups")
+def service_restart(name, delay):
+    """Restart services with sequential startup and configurable delay."""
+    from italianollama.cli.services import restart_services_sequentially, is_service_running, start_service, stop_service
     
     names = ["api", "chainlit", "streamlit"] if name == "all" else [name]
     
-    for svc in names:
+    if len(names) == 1:
+        # Single service: use old logic (no delay)
+        svc = names[0]
         if is_service_running(svc):
             stop_service(svc)
             # Wait for port to clear
@@ -319,6 +322,9 @@ def service_restart(name):
                 if not is_service_running(svc):
                     break
         start_service(svc)
+    else:
+        # Multiple services: use sequential restart with delay
+        restart_services_sequentially(names, startup_delay=delay)
 
 
 @service.command("status")
