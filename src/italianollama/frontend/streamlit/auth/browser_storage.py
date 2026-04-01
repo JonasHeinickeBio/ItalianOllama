@@ -9,7 +9,7 @@ This module handles:
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 import streamlit as st
 
@@ -73,7 +73,7 @@ def save_session_to_cookies(student_id: str, access_token: str, expires_days: in
         return False
 
 
-def restore_session_from_cookies() -> Tuple[Optional[str], Optional[str]]:
+def restore_session_from_cookies() -> tuple[str | None, str | None]:
     """
     Restore JWT token and student_id from browser cookies if they exist.
 

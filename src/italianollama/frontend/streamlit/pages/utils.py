@@ -9,7 +9,7 @@ from collections.abc import Callable
 from functools import wraps
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
 import streamlit as st
 
@@ -131,7 +131,7 @@ def require_auth() -> bool:
     return True
 
 
-def get_student_id() -> Optional[str]:
+def get_student_id() -> str | None:
     """Get current student ID, require auth first."""
     require_auth()
     return st.session_state.student_id
@@ -263,7 +263,7 @@ def cache_student_data(ttl: int = 60):
 # ============================================================================
 
 
-def metric_card(label: str, value: Any, emoji: str = "📊", delta: Optional[str] = None):
+def metric_card(label: str, value: Any, emoji: str = "📊", delta: str | None = None):
     """Render a metric card with consistent styling."""
     st.metric(label, value, delta=delta)
 
