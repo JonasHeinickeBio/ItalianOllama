@@ -43,7 +43,7 @@ class TestTutorState:
         assert len(state["messages"]) == 2
         assert state["exercise_type"] == "vocabulary"
 
-    def test_cef r_levels(self):
+    def test_cefr_levels(self):
         """Test CEFR_LEVELS constant."""
         assert "A1" in CEFR_LEVELS
         assert "A2" in CEFR_LEVELS

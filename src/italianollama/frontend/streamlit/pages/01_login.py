@@ -77,15 +77,15 @@ if st.session_state.authenticated and st.session_state.student_id:
 
 # Login form
 st.markdown("---")
-st.subheader("Accedi o Registrati")
+st.subheader("🔐 Accedi")
 
 with st.form("login_form", border=True):
     student_id = st.text_input(
         "Inserisci il tuo ID studente",
         placeholder="mario.rossi@example.com",
-        help="Puoi usare la tua email o qualsiasi ID univoco",
+        help="Usa l'ID che hai registrato durante la registrazione",
     )
-    submit = st.form_submit_button("✅ Accedi / Registrati", use_container_width=True)
+    submit = st.form_submit_button("✅ Accedi", use_container_width=True)
 
     if submit:
         if not student_id or not student_id.strip():
@@ -121,7 +121,7 @@ with st.form("login_form", border=True):
                     f"✓ Session state updated | authenticated=True | student_id={student_id}"
                 )
 
-                # Fetch or create student profile
+                # Fetch student profile
                 logger.info(f"👤 Fetching student profile for: {student_id}")
                 with st.spinner("Caricamento profilo..."):
                     profile = api.get_student(student_id)
@@ -130,12 +130,9 @@ with st.form("login_form", border=True):
                     )
 
                     if profile is None:
-                        logger.info(f"⚠️ Profile not found, creating new student: {student_id}")
-                        # Create new student
-                        profile = api.create_student(student_id, student_id)
-                        logger.info(
-                            f"✓ New student created | Profile: {type(profile)} | Keys: {list(profile.keys()) if profile else 'None'}"
-                        )
+                        logger.error(f"❌ Student profile not found: {student_id}")
+                        st.error(f"❌ Studente non trovato: {student_id}. Per favore registrati prima.")
+                        st.stop()
                     else:
                         logger.info(
                             f"✓ Existing student profile found | Name: {profile.get('name', 'N/A')} | Level: {profile.get('level', 'N/A')}"
@@ -159,6 +156,16 @@ with st.form("login_form", border=True):
                 )
                 st.error(f"❌ Errore durante l'autenticazione: {str(e)}")
                 st.stop()
+
+# Signup prompt
+st.divider()
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.info("📝 Non hai ancora un account?")
+with col2:
+    if st.button("Registrati", use_container_width=True, key="signup_btn"):
+        logger.info("→ REDIRECTING to signup page...")
+        st.switch_page("pages/01b_signup.py")
 
 # Footer
 st.markdown("---")

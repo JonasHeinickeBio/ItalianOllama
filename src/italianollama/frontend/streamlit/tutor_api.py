@@ -236,9 +236,9 @@ class TutorAPIClient:
             logger.warning(f"⚠️ Student stats not found - student_id={student_id}")
         return result
 
-    def create_student(self, student_id: str, name: str) -> dict | None:
+    def create_student(self, student_id: str, name: str, native_language: str = "English") -> dict | None:
         """Create a new student."""
-        logger.info(f"👤 Creating new student - student_id={student_id}, name={name}")
+        logger.info(f"👤 Creating new student - student_id={student_id}, name={name}, native_language={native_language}")
         logger.debug("  → Calling POST /students endpoint...")
 
         result = self._request(
@@ -247,7 +247,7 @@ class TutorAPIClient:
             json_data={
                 "student_id": student_id,
                 "name": name,
-                "native_language": "English",
+                "native_language": native_language,
             },
             use_auth=False,
         )
