@@ -17,14 +17,19 @@ This is an optimized merge of main.py and main_enhanced.py, combining:
 
 import logging
 
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from italianollama.api.config import get_settings
-from italianollama.api.exceptions import NotFoundError, ValidationError
-from italianollama.api.middleware.auth import create_access_token
+from italianollama.api.exceptions import AuthenticationError, NotFoundError, ValidationError
+from italianollama.api.middleware.auth import (
+    create_access_token,
+    verify_access_token,
+    get_current_student,
+)
+from italianollama.api.middleware.context import ContextMiddleware
 from italianollama.api.middleware.errors import setup_error_handlers
 from italianollama.api.middleware.logging import LoggingMiddleware
 from italianollama.api.middleware.metrics import setup_metrics
@@ -51,6 +56,9 @@ app = FastAPI(
 
 # Request logging (must be first)
 app.add_middleware(LoggingMiddleware)
+
+# Context injection - request_id, student_id, session_id
+app.add_middleware(ContextMiddleware)
 
 # CORS with configurable origins
 app.add_middleware(
@@ -274,6 +282,60 @@ async def verify_token(authorization: str | None = Header(None)):
         raise
 
 
+@app.post("/auth/refresh", response_model=TokenResponse)
+async def refresh_token(
+    authorization: str | None = Header(None, alias="Authorization"),
+    student_id: str | None = Header(None, alias="X-Student-ID"),
+):
+    """Refresh an expiring or expired token.
+
+    Frontend calls this when token is about to expire or has expired.
+    Requires either a valid (or recently expired) token or student_id header.
+
+    Args:
+        authorization: Bearer token (can be expired for refresh)
+        student_id: Fallback student_id if token is invalid
+
+    Returns:
+        TokenResponse with new JWT token
+    """
+    logger.info("Token refresh request")
+
+    student = None
+
+    # Try to extract student from token
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        try:
+            payload = verify_access_token(token)
+            student = payload.get("sub")
+            logger.debug(f"Refreshed token for student: {student}")
+        except AuthenticationError:
+            # Token invalid - check header
+            if not student_id:
+                raise AuthenticationError(
+                    "Cannot refresh token. Provide valid token or X-Student-ID header."
+                )
+            student = student_id
+    elif student_id:
+        student = student_id
+    else:
+        raise ValidationError("Authorization header or X-Student-ID required")
+
+    if not student:
+        raise ValidationError("Student ID not found")
+
+    # Generate new token
+
+    token = create_access_token(student)
+    logger.info(f"Token refreshed for student: {student}")
+
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.jwt_expiration_hours * 3600,
+    )
+
+
 # ============ Chat Routes ============
 
 
@@ -487,13 +549,22 @@ async def create_student(student: StudentCreate, req: Request):
         raise
 
 
-@app.get("/students/{student_id}")
-async def get_student(student_id: str, req: Request):
+async def get_student(
+    student_id: str,
+    req: Request,
+    current_student: str = Depends(get_current_student),
+):
     """Get student info and progress.
 
     Returns student profile, current CEFR level, vocabulary count, etc.
+    Requires valid JWT token. Students can only access their own data.
     """
     logger.info(f"Fetching student info: {student_id}")
+
+    # Ownership check: students can only access their own data
+    if current_student != student_id:
+        logger.warning(f"Access denied: {current_student} tried to access {student_id}")
+        raise AuthenticationError("Access denied to this student's data")
 
     client = get_neo4j_client()
 
@@ -512,38 +583,300 @@ async def get_student(student_id: str, req: Request):
 
 
 @app.get("/api/student/{student_id}/stats")
-async def get_student_stats(student_id: str):
-    """Get aggregated stats for dashboard KPI metrics."""
+async def get_student_stats(
+    student_id: str,
+    current_student: str = Depends(get_current_student),
+):
+    """Get aggregated stats for dashboard KPI metrics.
+
+    Requires valid JWT token. Students can only access their own stats.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
     client = get_neo4j_client()
     return await client.get_student_stats(student_id)
 
 
 @app.get("/api/student/{student_id}/vocabulary")
-async def get_student_vocabulary(student_id: str, limit: int = 50):
-    """Get student's vocabulary with confidence scores."""
+async def get_student_vocabulary(
+    student_id: str,
+    limit: int = 50,
+    current_student: str = Depends(get_current_student),
+):
+    """Get student's vocabulary with confidence scores.
+
+    Requires valid JWT token. Students can only access their own vocabulary.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
     client = get_neo4j_client()
     return await client.get_student_vocabulary(student_id, limit=limit)
 
 
 @app.get("/api/student/{student_id}/grammar-errors")
-async def get_student_grammar_errors(student_id: str, limit: int = 10):
-    """Get most common grammar errors for student."""
+async def get_student_grammar_errors(
+    student_id: str,
+    limit: int = 10,
+    current_student: str = Depends(get_current_student),
+):
+    """Get most common grammar errors for student.
+
+    Requires valid JWT token. Students can only access their own errors.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
     client = get_neo4j_client()
     return await client.get_common_errors(student_id, limit=limit)
 
 
 @app.get("/api/student/{student_id}/graph")
-async def get_student_graph(student_id: str):
-    """Get nodes and relationships for st-link-analysis."""
+async def get_student_graph(
+    student_id: str,
+    current_student: str = Depends(get_current_student),
+):
+    """Get nodes and relationships for st-link-analysis.
+
+    Requires valid JWT token. Students can only access their own graph.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
     client = get_neo4j_client()
     return await client.get_full_knowledge_graph(student_id)
 
 
 @app.get("/api/student/{student_id}/test-readiness")
-async def get_student_test_readiness(student_id: str):
-    """Get CEFR test readiness scores."""
+async def get_student_test_readiness(
+    student_id: str,
+    current_student: str = Depends(get_current_student),
+):
+    """Get CEFR test readiness scores.
+
+    Requires valid JWT token. Students can only access their own readiness.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
     client = get_neo4j_client()
     return await client.get_test_readiness(student_id)
+
+
+# ============ Analytics Routes ============
+
+
+@app.get("/analytics/velocity/{student_id}")
+async def get_learning_velocity(
+    student_id: str,
+    days: int = 7,
+    req: Request = None,
+    current_student: str = Depends(get_current_student),
+):
+    """Get learning velocity for a student over the past N days.
+
+    Velocity = (exercises_completed / days) in past N days
+    Returns: exercises per day, trend, estimated time to next level
+
+    Requires valid JWT token. Students can only access their own velocity.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
+    logger.info(f"Fetching learning velocity for {student_id} (last {days} days)")
+
+    client = get_neo4j_client()
+
+    try:
+        # Query: count completed exercises in last N days
+        query = """
+        MATCH (s:Student {student_id: $student_id})-[:COMPLETED]->(e:Exercise)
+        WHERE e.completed_at >= datetime() - duration({days: $days})
+        WITH count(e) AS exercises_completed
+        RETURN {
+            student_id: $student_id,
+            period_days: $days,
+            exercises_completed: exercises_completed,
+            velocity: ROUND(toFloat(exercises_completed) / $days, 2),
+            unit: "exercises/day"
+        } AS velocity
+        """
+
+        async with client._driver.session(database=client.database) as session:
+            result = await session.run(query, student_id=student_id, days=days)
+            record = await result.single()
+
+            if record:
+                return record["velocity"]
+            else:
+                # No data yet
+                return {
+                    "student_id": student_id,
+                    "period_days": days,
+                    "exercises_completed": 0,
+                    "velocity": 0.0,
+                    "unit": "exercises/day",
+                }
+    except Exception as e:
+        logger.error(f"Error fetching velocity: {e}", exc_info=True)
+        raise
+
+
+@app.get("/analytics/skills/{student_id}")
+async def get_student_skills(
+    student_id: str,
+    req: Request = None,
+    current_student: str = Depends(get_current_student),
+):
+    """Get skill breakdown for a student.
+
+    Returns: grammar, vocabulary, listening, speaking, reading, writing scores
+
+    Requires valid JWT token. Students can only access their own skills.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
+    logger.info(f"Fetching skills for {student_id}")
+
+    client = get_neo4j_client()
+
+    try:
+        # Query: get grammar errors and vocabulary to infer skill levels
+        query = """
+        MATCH (s:Student {student_id: $student_id})
+        OPTIONAL MATCH (s)-[r:HAS_PLACEMENT_LEVEL]->(l:CEFRLevel)
+        OPTIONAL MATCH (s)-[:KNOWS]->(v:Vocabulary)
+        OPTIONAL MATCH (s)-[:MADE_ERROR]->(err:GrammarError)
+        OPTIONAL MATCH (s)-[:COMPLETED]->(e:Exercise {type: 'grammar'})
+        WITH s, l, r,
+             count(DISTINCT v) AS vocabulary_count,
+             count(DISTINCT err) AS grammar_errors,
+             count(DISTINCT e) AS grammar_exercises
+        RETURN {
+            student_id: $student_id,
+            grammar: ROUND(100 - (toFloat(grammar_errors) / CASE WHEN grammar_exercises > 0 THEN grammar_exercises ELSE 1 END * 100), 1),
+            vocabulary: ROUND(toFloat(vocabulary_count) / 100 * 100, 1),
+            placement_level: l.name,
+            last_assessed: r.determined_at
+        } AS skills
+        """
+
+        async with client._driver.session(database=client.database) as session:
+            result = await session.run(query, student_id=student_id)
+            record = await result.single()
+
+            if record:
+                return record["skills"]
+            else:
+                return {
+                    "student_id": student_id,
+                    "grammar": 0.0,
+                    "vocabulary": 0.0,
+                    "placement_level": None,
+                    "last_assessed": None,
+                }
+    except Exception as e:
+        logger.error(f"Error fetching skills: {e}", exc_info=True)
+        raise
+
+
+@app.get("/analytics/errors/{student_id}")
+async def get_common_errors(
+    student_id: str,
+    limit: int = 5,
+    req: Request = None,
+    current_student: str = Depends(get_current_student),
+):
+    """Get most common grammar errors for a student.
+
+    Returns: top N grammar errors with frequency and rule explanations
+
+    Requires valid JWT token. Students can only access their own errors.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
+    logger.info(f"Fetching common errors for {student_id} (limit: {limit})")
+
+    client = get_neo4j_client()
+
+    try:
+        return await client.get_common_errors(student_id, limit=limit)
+    except Exception as e:
+        logger.error(f"Error fetching common errors: {e}", exc_info=True)
+        raise
+
+
+# ============ Recommendations Routes ============
+
+
+@app.get("/recommendations/next-module/{student_id}")
+async def get_next_module(
+    student_id: str,
+    req: Request = None,
+    current_student: str = Depends(get_current_student),
+):
+    """Get personalized next module recommendation.
+
+    Returns: recommended module, difficulty, reason for recommendation
+
+    Requires valid JWT token. Students can only access their own recommendations.
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
+    logger.info(f"Fetching next recommended module for student_id={student_id}")
+
+    client = get_neo4j_client()
+
+    try:
+        # Query: get student's current level and recommend next
+        query = """
+        MATCH (s:Student {student_id: $student_id})
+        OPTIONAL MATCH (s)-[r:HAS_PLACEMENT_LEVEL]->(l:CEFRLevel)
+        WITH s, l, r
+        RETURN {
+            student_id: $student_id,
+            current_level: l.name,
+            recommended_module: CASE
+                WHEN l.name IN ['A1'] THEN 'Introduction to Italian'
+                WHEN l.name IN ['A2'] THEN 'Elementary Conversations'
+                WHEN l.name IN ['B1'] THEN 'Intermediate Grammar'
+                WHEN l.name IN ['B2'] THEN 'Advanced Reading'
+                WHEN l.name IN ['C1'] THEN 'Literature & Nuance'
+                ELSE 'Placement Test'
+            END,
+            focus_area: CASE
+                WHEN l.name IN ['A1', 'A2'] THEN 'Vocabulary & Basic Grammar'
+                WHEN l.name IN ['B1'] THEN 'Complex Tenses & Subjunctive'
+                ELSE 'Style & Idiomatic Expressions'
+            END,
+            time_estimate_minutes: 30,
+            difficulty: l.name
+        } AS recommendation
+        """
+
+        async with client._driver.session(database=client.database) as session:
+            result = await session.run(query, student_id=student_id)
+            record = await result.single()
+
+            if record:
+                return record["recommendation"]
+            else:
+                # No level determined yet - recommend placement test
+                return {
+                    "student_id": student_id,
+                    "current_level": None,
+                    "recommended_module": "Placement Test",
+                    "focus_area": "Determine your initial level",
+                    "time_estimate_minutes": 25,
+                    "difficulty": "N/A",
+                }
+    except Exception as e:
+        logger.error(f"Error fetching next module: {e}", exc_info=True)
+        raise
 
 
 # ============ Lifecycle Events ============

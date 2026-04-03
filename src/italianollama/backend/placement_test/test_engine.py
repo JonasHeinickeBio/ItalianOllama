@@ -5,14 +5,13 @@ Handles test completion logic, answer validation, and CEFR level assignment.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from italianollama.backend.placement_test.models import (
     CEFRLevel,
     PlacementTestConfig,
     PlacementTestResult,
-    UserAnswer,
     Question,
+    UserAnswer,
 )
 
 
@@ -40,14 +39,14 @@ class PlacementTestEngine:
         if len(question_ids) != len(set(question_ids)):
             raise ValueError("Duplicate question IDs found in configuration")
 
-    def get_all_questions(self) -> List[Question]:
+    def get_all_questions(self) -> list[Question]:
         """Get all questions from all sections."""
         questions = []
         for section in self.config.sections:
             questions.extend(section.questions)
         return questions
 
-    def get_section_questions(self, section_letter: str) -> List[Question]:
+    def get_section_questions(self, section_letter: str) -> list[Question]:
         """
         Get questions for a specific section.
 
@@ -78,7 +77,7 @@ class PlacementTestEngine:
             raise ValueError(f"Question {question_id} not found")
         return selected_answer.lower() == question.correct_answer
 
-    def _get_question_by_id(self, question_id: int) -> Optional[Question]:
+    def _get_question_by_id(self, question_id: int) -> Question | None:
         """Get a question by ID."""
         for question in self.get_all_questions():
             if question.id == question_id:
@@ -87,8 +86,8 @@ class PlacementTestEngine:
 
     def score_test(
         self,
-        answers: Dict[int, str],
-        student_id: Optional[str] = None,
+        answers: dict[int, str],
+        student_id: str | None = None,
     ) -> PlacementTestResult:
         """
         Score a completed test and determine CEFR level.
@@ -102,8 +101,8 @@ class PlacementTestEngine:
         """
         all_questions = self.get_all_questions()
         total_correct = 0
-        section_scores: Dict[str, int] = {}
-        user_answers: List[UserAnswer] = []
+        section_scores: dict[str, int] = {}
+        user_answers: list[UserAnswer] = []
 
         # Score each question and track section performance
         for question in all_questions:
@@ -147,7 +146,7 @@ class PlacementTestEngine:
             timestamp=datetime.now().isoformat(),
         )
 
-    def _determine_level(self, section_scores: Dict[str, int]) -> CEFRLevel:
+    def _determine_level(self, section_scores: dict[str, int]) -> CEFRLevel:
         """
         Determine CEFR level based on section scores.
 
@@ -185,7 +184,7 @@ class PlacementTestEngine:
 
         return highest_passed_level
 
-    def get_section_summary(self) -> Dict[str, Dict]:
+    def get_section_summary(self) -> dict[str, dict]:
         """
         Get a summary of all sections for UI display.
 
@@ -202,14 +201,14 @@ class PlacementTestEngine:
             }
         return summary
 
-    def get_question_by_index(self, index: int) -> Optional[Question]:
+    def get_question_by_index(self, index: int) -> Question | None:
         """Get question by position index (0-based)."""
         all_questions = self.get_all_questions()
         if 0 <= index < len(all_questions):
             return all_questions[index]
         return None
 
-    def get_random_question(self, exclude_ids: Optional[List[int]] = None) -> Optional[Question]:
+    def get_random_question(self, exclude_ids: list[int] | None = None) -> Question | None:
         """Get a random question, optionally excluding certain IDs."""
         import random
 

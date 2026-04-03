@@ -50,8 +50,15 @@ logger.info("🔄 Initializing session state variables...")
 initialize_session_state()
 
 # === MAIN PAGE ===
-st.title("ItalianOllama 🇮🇹")
-st.markdown("### Comincia il tuo percorso di apprendimento dell'italiano!")
+st.markdown(
+    """
+    <div class="main-header">
+        <h1>ItalianOllama 🇮🇹</h1>
+        <h2>Comincia il tuo percorso di apprendimento dell'italiano</h2>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Health check
 logger.info("📡 Performing backend health check...")
@@ -63,9 +70,15 @@ if not check_backend_health():
 logger.info("✓ Backend health check PASSED")
 
 # === SIGNUP SECTION ===
-st.markdown("---")
-st.subheader("📝 Crea il tuo account")
-st.caption("Compila il modulo per registrarti come nuovo studente")
+st.markdown(
+    """
+    <div style="background: var(--white); padding: 2rem; border-radius: var(--border-radius); box-shadow: var(--shadow); margin: 2rem 0;">
+        <h3 style="color: var(--primary-color); margin-bottom: 1rem;">📝 Crea il tuo account</h3>
+        <p style="color: #666; margin-bottom: 1.5rem;">Compila il modulo per registrarti e iniziare subito le tue lezioni</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Initialize session state for form handling
 if "signup_error" not in st.session_state:
@@ -73,7 +86,7 @@ if "signup_error" not in st.session_state:
 if "signup_error_student_id" not in st.session_state:
     st.session_state.signup_error_student_id = None
 
-with st.form("signup_form", border=True):
+with st.form("signup_form", border=False):
     # Email / Student ID
     student_id = st.text_input(
         "Email o ID studente",
@@ -228,20 +241,19 @@ if st.button("🔐 Accedi", use_container_width=True, type="secondary"):
     st.switch_page("pages/01_login.py")
 
 # === FOOTER ===
-st.markdown("---")
 st.markdown(
     """
-    <div style='text-align: center; color: gray; font-size: 0.8em;'>
-    <p>ItalianOllama © 2024 | Powered by LangGraph & Neo4j</p>
-    <p>
-        <a href="https://github.com/JonasHeinickeBio/ItalianOllama" style="color: gray; text-decoration: none; margin: 0 10px;">
-            📚 Source
-        </a>
-        |
-        <a href="https://italianollama.com/docs" style="color: gray; text-decoration: none; margin: 0 10px;">
-            📖 Docs
-        </a>
-    </p>
+    <div class="footer">
+        <p>ItalianOllama © 2024 | Powered by LangGraph & Neo4j</p>
+        <div style="margin-top: 0.5rem;">
+            <a href="https://github.com/JonasHeinickeBio/ItalianOllama" style="color: var(--primary-color); text-decoration: none; margin: 0 10px;">
+                📚 Source
+            </a>
+            |
+            <a href="https://italianollama.com/docs" style="color: var(--primary-color); text-decoration: none; margin: 0 10px;">
+                📖 Docs
+            </a>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,

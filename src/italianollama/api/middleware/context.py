@@ -1,6 +1,6 @@
 """Context middleware for request enrichment.
 
-Injects request-scoped context (request_id, student_id, trace info) into request.state
+Injects request-scoped context (request_id, student_id, trace info, session_id) into request.state
 for logging, metrics, and authorization checks.
 """
 
@@ -20,6 +20,7 @@ class ContextMiddleware(BaseHTTPMiddleware):
     Adds:
     - request_id: Unique identifier for request tracing
     - student_id: Extracted from Authorization header or URL
+    - session_id: From cookie or generated new (persists across requests)
     - trace_id: For distributed tracing
     - start_time: For performance tracking
     """
@@ -41,8 +42,6 @@ class ContextMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             try:
-                from italianollama.api.middleware.auth import decode_jwt_payload
-
                 token = auth_header[7:]
                 payload = decode_jwt_payload(token)
                 student_id = payload.get("sub")
@@ -57,13 +56,24 @@ class ContextMiddleware(BaseHTTPMiddleware):
                     student_id = path_parts[2]
                 elif path_parts[1] == "analytics" and len(path_parts) > 3:
                     student_id = path_parts[3]
+                elif path_parts[1] == "recommendations" and len(path_parts) > 3:
+                    student_id = path_parts[3]
+                elif path_parts[1] == "api" and path_parts[2] == "student" and len(path_parts) > 3:
+                    student_id = path_parts[3]
 
         request.state.student_id = student_id
+
+        # Extract or create session_id
+        session_id = request.cookies.get("session_id")
+        if not session_id:
+            session_id = str(uuid4())
+        request.state.session_id = session_id
 
         # Log context
         logger.debug(
             f"Context | request_id={request_id} | "
             f"student_id={student_id or 'anonymous'} | "
+            f"session_id={session_id[:8]}... | "
             f"method={request.method} | path={request.url.path}"
         )
 
@@ -74,6 +84,17 @@ class ContextMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
         if student_id:
             response.headers["X-Student-ID"] = student_id
+        response.headers["X-Session-ID"] = session_id
+
+        # Set session cookie if not already set
+        if "session_id" not in request.cookies:
+            response.set_cookie(
+                key="session_id",
+                value=session_id,
+                httponly=True,
+                max_age=86400 * 15,  # 15 days
+                samesite="lax",
+            )
 
         return response
 

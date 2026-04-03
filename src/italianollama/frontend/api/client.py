@@ -6,6 +6,7 @@ Functions:
 - stream_chat_completions: Stream responses from POST /v1/chat/completions via SSE
 """
 
+import asyncio
 from collections.abc import AsyncIterator
 import json
 import logging
@@ -15,7 +16,7 @@ import httpx
 
 from italianollama.frontend.config import get_settings
 
-from .errors import BackendConnectionError, StreamingError, StudentNotFoundError
+from .errors import BackendConnectionError, BackendError, StreamingError, StudentNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -23,17 +24,19 @@ logger = logging.getLogger(__name__)
 class BackendClient:
     """Async HTTP client for backend API.
 
-    Handles connection pooling, timeout, error handling, and logging.
+    Handles connection pooling, timeout, error handling, logging, and retries.
     Designed for use in async context (Chainlit environment).
     """
 
-    def __init__(self, timeout: float = 30.0):
-        """Initialize client with timeout configuration.
+    def __init__(self, timeout: float = 30.0, max_retries: int = 3):
+        """Initialize client with timeout and retry configuration.
 
         Args:
             timeout: Request timeout in seconds
+            max_retries: Maximum number of retry attempts
         """
         self.timeout = timeout
+        self.max_retries = max_retries
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -52,8 +55,55 @@ class BackendClient:
             await self._client.aclose()
             self._client = None
 
+    async def _retry_with_backoff(self, coro, operation: str = "request"):
+        """Execute async operation with exponential backoff retry logic.
+
+        Args:
+            coro: Async coroutine to execute
+            operation: Operation name for logging
+
+        Returns:
+            Result of the coroutine
+
+        Raises:
+            BackendConnectionError: If all retries exhausted
+        """
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                return await coro()
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt < self.max_retries - 1:
+                    wait_time = 2**attempt  # Exponential backoff: 1, 2, 4 seconds
+                    logger.warning(
+                        f"{operation} attempt {attempt + 1}/{self.max_retries} failed, "
+                        f"retrying in {wait_time}s: {exc}"
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"{operation} failed after {self.max_retries} retries: {exc}")
+            except httpx.HTTPStatusError as exc:
+                # Don't retry on 4xx errors (except 429)
+                if 400 <= exc.response.status_code < 500 and exc.response.status_code != 429:
+                    raise
+                last_error = exc
+                if attempt < self.max_retries - 1:
+                    wait_time = 2**attempt
+                    logger.warning(
+                        f"{operation} attempt {attempt + 1}/{self.max_retries} failed "
+                        f"(status {exc.response.status_code}), retrying in {wait_time}s"
+                    )
+                    await asyncio.sleep(wait_time)
+
+        if last_error:
+            raise BackendConnectionError(
+                f"Backend unreachable after {self.max_retries} retries"
+            ) from last_error
+        raise BackendConnectionError(f"{operation} failed")
+
     async def get_student_profile(self, student_id: str) -> dict[str, Any] | None:
-        """Fetch student profile from backend.
+        """Fetch student profile from backend with retries.
 
         Args:
             student_id: Student identifier
@@ -67,9 +117,14 @@ class BackendClient:
         settings = get_settings()
         url = f"{settings.backend_url}/students/{student_id}"
 
-        try:
+        async def fetch():
             client = await self._get_client()
-            response = await client.get(url)
+            return await client.get(url)
+
+        try:
+            response = await self._retry_with_backoff(
+                fetch, operation=f"get_student_profile({student_id})"
+            )
 
             if response.status_code == 404:
                 logger.info("Student not found: %s", student_id)
@@ -82,12 +137,11 @@ class BackendClient:
         except httpx.HTTPStatusError as exc:
             logger.warning("Backend error %d for %s: %s", exc.response.status_code, url, exc)
             raise BackendError(f"Backend returned {exc.response.status_code}") from exc
-        except httpx.RequestError as exc:
-            logger.warning("Cannot reach backend at %s: %s", url, exc)
-            raise BackendConnectionError(f"Backend unreachable: {url}") from exc
+        except BackendConnectionError:
+            raise
 
     async def create_student(self, student_id: str, name: str) -> dict[str, Any] | None:
-        """Create a new student in the backend.
+        """Create a new student in the backend with retries.
 
         Args:
             student_id: Unique student identifier
@@ -100,9 +154,14 @@ class BackendClient:
         url = f"{settings.backend_url}/students"
         payload = {"student_id": student_id, "name": name}
 
-        try:
+        async def create():
             client = await self._get_client()
-            response = await client.post(url, json=payload)
+            return await client.post(url, json=payload)
+
+        try:
+            response = await self._retry_with_backoff(
+                create, operation=f"create_student({student_id})"
+            )
             response.raise_for_status()
             logger.info("Student created: %s", student_id)
             return response.json()
@@ -110,9 +169,8 @@ class BackendClient:
         except httpx.HTTPStatusError as exc:
             logger.warning("Failed to create student %s: %s", student_id, exc)
             raise BackendError(f"Failed to create student: {exc.response.status_code}") from exc
-        except httpx.RequestError as exc:
-            logger.warning("Cannot reach backend at %s: %s", url, exc)
-            raise BackendConnectionError(f"Backend unreachable: {url}") from exc
+        except BackendConnectionError:
+            raise
 
     async def get_auth_token(self, student_id: str) -> str | None:
         """Generate JWT authentication token.
@@ -168,7 +226,9 @@ class BackendClient:
         try:
             client = await self._get_client()
             # Streaming LLM generation needs a significantly longer timeout (5 min)
-            async with client.stream("POST", url, json=payload, headers=headers, timeout=300.0) as response:
+            async with client.stream(
+                "POST", url, json=payload, headers=headers, timeout=300.0
+            ) as response:
                 response.raise_for_status()
 
                 async for line in response.aiter_lines():
@@ -289,7 +349,3 @@ async def stream_chat_completions(
     client = get_backend_client()
     async for token in client.stream_chat_completions(messages, model, extra_headers):
         yield token
-
-
-# Import after function definitions to avoid circular imports
-from .errors import BackendError  # noqa: E402

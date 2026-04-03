@@ -49,17 +49,19 @@ poetry run chainlit run src/italianollama/frontend/chainlit_app.py --port 8501
 **Terminal 3 (Dashboard):**
 ```bash
 export CHAINLIT_URL="http://localhost:8501"
-poetry run streamlit run src/italianollama/frontend/streamlit/app.py --server.port 8502
+poetry run streamlit run src/italianollama/frontend/streamlit/app_enhanced.py --server.port 8502
 ```
 
 ## Dashboard Features
 
 - **💬 Chat**: Real-time conversation with Sofia.
 - **📊 Progress**: KPI metrics and learning history.
-- **📚 Vocabulary**: Confidence heatmap of learned words.
+- **📚 Vocabulary**: Confidence heatmap of learned words with spaced repetition.
 - **✏️ Grammar**: Detailed error tracking with book-rule explanations.
 - **🕸️ Knowledge Graph**: Interactive view of your personal learning network.
 - **🎯 Test Readiness**: Skill radar charts for CEFR exam prep.
+- **📝 Placement Test**: Interactive CEFR A1-C1 assessment with Neo4j persistence.
+- **🎨 Professional Styling**: Custom CSS themes, card-based layouts, consistent theming.
 
 ## Documentation
 

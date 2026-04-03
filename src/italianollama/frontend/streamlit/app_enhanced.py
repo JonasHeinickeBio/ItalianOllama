@@ -6,8 +6,10 @@ Uses Streamlit's pages/ directory structure for better organization:
 
 Pages:
 - pages/01_login.py      → Login page (separate authentication)
+- pages/01b_signup.py    → Signup page for new students
 - pages/02_dashboard.py  → Main dashboard with learning metrics
 - pages/03_chat.py       → Chat with Sofia
+- pages/03_placement_test.py → Italian placement test (CEFR A1-C1)
 - pages/04_vocabulary.py → Vocabulary management with spaced rep
 - pages/05_settings.py   → User settings and profile management
 
@@ -30,6 +32,15 @@ except ImportError:
     def get_backend_url() -> str:
         return os.getenv("BACKEND_URL", "http://localhost:8000")
 
+
+with open(
+    os.path.join(
+        os.path.dirname(__file__), "styles", "professional.css"
+    ),
+    "r",
+) as f:
+    css = f.read()
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 # --- Page Configuration ---
 st.set_page_config(

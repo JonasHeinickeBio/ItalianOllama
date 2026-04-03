@@ -46,8 +46,15 @@ def get_vocabulary_items(due_for_review: bool = False):
 
 
 # === PAGE CONTENT ===
-st.title("📝 Gestione Vocabolario")
-st.markdown("_Costruisci il tuo vocabolario italiano con spaced repetition_")
+st.markdown(
+    """
+    <div class="main-header">
+        <h1>📝 Gestione Vocabolario</h1>
+        <h2>Costruisci il tuo vocabolario italiano con spaced repetition</h2>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 tab1, tab2, tab3 = st.tabs(
     ["📖 Il Mio Vocabolario", "➕ Aggiungi Nuova Parola", "🔄 Ripassa (SM-2)"]

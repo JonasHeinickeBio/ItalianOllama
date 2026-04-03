@@ -54,8 +54,15 @@ logger.info(
 )
 
 # === MAIN PAGE ===
-st.title("ItalianOllama 🇮🇹")
-st.markdown("### Impara l'italiano con Sofia, la tua tutor AI personale.")
+st.markdown(
+    """
+    <div class="main-header">
+        <h1>ItalianOllama 🇮🇹</h1>
+        <h2>Impara l'italiano con Sofia, la tua tutor AI personale</h2>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Health check
 logger.info("📡 Performing backend health check...")
@@ -76,11 +83,17 @@ if st.session_state.authenticated and st.session_state.student_id:
     st.stop()
 
 # === LOGIN SECTION ===
-st.markdown("---")
-st.subheader("🔐 Accedi")
-st.caption("Inserisci il tuo ID studente per continuare")
+st.markdown(
+    """
+    <div style="background: var(--white); padding: 2rem; border-radius: var(--border-radius); box-shadow: var(--shadow); margin: 2rem 0;">
+        <h3 style="color: var(--primary-color); margin-bottom: 1rem;">🔐 Accedi al tuo account</h3>
+        <p style="color: #666; margin-bottom: 1.5rem;">Inserisci il tuo ID studente per continuare il tuo percorso di apprendimento</p>
 
-with st.form("login_form", border=True):
+    """,
+    unsafe_allow_html=True,
+)
+
+with st.form("login_form", border=False):
     student_id = st.text_input(
         "ID Studente",
         placeholder="Esempio: mario.rossi@email.com oppure mario123",
@@ -128,6 +141,29 @@ with st.form("login_form", border=True):
                     f"✓ Student profile found | Name: {profile.get('name', 'N/A')} | Level: {profile.get('level', 'N/A')}"
                 )
 
+                # Get JWT token for authenticated session
+                logger.info("📜 Obtaining JWT token for session...")
+                login_result = api.login(student_id)
+                if not login_result:
+                    logger.error("❌ Failed to obtain JWT token")
+                    st.error("❌ Errore durante l'accesso al sistema")
+                    st.stop()
+
+                logger.info("✓ JWT token obtained successfully")
+
+                # Save token to browser cookies for persistence
+                try:
+                    from italianollama.frontend.streamlit.auth.browser_storage import (
+                        save_session_to_cookies,
+                    )
+
+                    token = api.get_token()
+                    if token:
+                        save_session_to_cookies(student_id, token, expires_days=7)
+                        logger.info("✓ Token saved to browser cookies")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to save to cookies: {e}")
+
                 # Set authenticated state
                 st.session_state.authenticated = True
                 st.session_state.student_id = student_id
@@ -160,37 +196,39 @@ with st.form("login_form", border=True):
                     st.caption(f"Dettagli: {error_msg}")
                 st.stop()
 
+st.markdown("</form>", unsafe_allow_html=True)
+
 # === SIGNUP SECTION ===
-st.divider()
 st.markdown(
     """
-<div style='text-align: center;'>
-    <h3>👤 Non hai ancora un account?</h3>
-    <p style='color: gray;'>Crea un nuovo account per iniziare le lezioni</p>
-</div>
-""",
+    <div style="text-align: center; margin: 2rem 0; background: var(--white); padding: 2rem; border-radius: var(--border-radius); box-shadow: var(--shadow);">
+        <h3 style="color: var(--primary-color);">👤 Non hai ancora un account?</h3>
+        <p style="color: #666;">Crea un nuovo account e inizia subito le tue lezioni</p>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
-if st.button("📝 Registrati Ora", use_container_width=True, type="secondary"):
-    logger.info("→ User clicked signup button - redirecting to signup page")
-    st.switch_page("pages/01b_signup.py")
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if st.button("📝 Registrati Ora", use_container_width=True, type="secondary"):
+        logger.info("→ User clicked signup button - redirecting to signup page")
+        st.switch_page("pages/01b_signup.py")
 
 # === FOOTER ===
-st.markdown("---")
 st.markdown(
     """
-    <div style='text-align: center; color: gray; font-size: 0.8em;'>
-    <p>ItalianOllama © 2024 | Powered by LangGraph & Neo4j</p>
-    <p>
-        <a href="https://github.com/JonasHeinickeBio/ItalianOllama" style="color: gray; text-decoration: none; margin: 0 10px;">
-            📚 Source
-        </a>
-        |
-        <a href="https://italianollama.com/docs" style="color: gray; text-decoration: none; margin: 0 10px;">
-            📖 Docs
-        </a>
-    </p>
+    <div class="footer">
+        <p>ItalianOllama © 2024 | Powered by LangGraph & Neo4j</p>
+        <div style="margin-top: 0.5rem;">
+            <a href="https://github.com/JonasHeinickeBio/ItalianOllama" style="color: var(--primary-color); text-decoration: none; margin: 0 10px;">
+                📚 Source
+            </a>
+            |
+            <a href="https://italianollama.com/docs" style="color: var(--primary-color); text-decoration: none; margin: 0 10px;">
+                📖 Docs
+            </a>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,

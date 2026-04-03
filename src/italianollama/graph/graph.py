@@ -115,7 +115,8 @@ async def chat_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorStat
     except Exception as e:
         state["response"] = f"Ciao! {str(e)}"
 
-    state["should_continue"] = True
+    # Default: stop after one response, user needs to explicitly request to continue
+    state["should_continue"] = False
     return state
 
 
@@ -145,9 +146,12 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
 
     # ============ Add Nodes ============
 
-    # Router - entry point
+    # Router - entry point with stop condition
     async def router_wrapper(state: TutorState):
-        return await router_node(state)
+        result = await router_node(state)
+        if result.get("should_continue") is False:
+            result["router_decision"] = "__end__"
+        return result
 
     workflow.add_node("router", router_wrapper)
 
@@ -222,8 +226,12 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
     ]:
         workflow.add_edge(node, "router")
 
-    # Compile the graph
-    return workflow.compile()
+    # Compile the graph with recursion limit to prevent infinite loops
+    return workflow.compile(
+        checkpointer=None,
+        interrupt_before=[],
+        interrupt_after=[],
+    )
 
 
 __all__ = ["create_tutor_graph", "router_node", "chat_node"]

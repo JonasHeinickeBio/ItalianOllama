@@ -2,23 +2,27 @@
 Placement Test Page - Interactive Italian Language Placement Test
 
 Manages test state, question display, answer tracking, and result calculation.
+Integrates with Neo4j graph for persistence of all test data.
 """
 
-import logging
+import asyncio
 from datetime import datetime
+import logging
 
 import streamlit as st
 
+from italianollama.api.config import get_settings
 from italianollama.backend.placement_test import (
-    get_placement_test,
-    PlacementTestEngine,
     CEFRLevel,
+    PlacementTestEngine,
+    PlacementTestOrchestrator,
+    create_orchestrator,
+    get_placement_test,
 )
 from italianollama.frontend.streamlit.pages.utils import (
-    require_auth,
     get_student_id,
     render_sidebar_full,
-    render_page_navigation,
+    require_auth,
 )
 
 # Configure logging
@@ -50,15 +54,48 @@ render_sidebar_full("📋 Placement Test")
 # ============================================================================
 
 
+def _initialize_orchestrator() -> PlacementTestOrchestrator | None:
+    """Initialize test orchestrator with Neo4j connection.
+
+    Returns:
+        PlacementTestOrchestrator if successful, None if failed.
+    """
+    try:
+        settings = get_settings()
+        orchestrator = asyncio.run(
+            create_orchestrator(
+                neo4j_uri=settings.neo4j_uri,
+                neo4j_user=settings.neo4j_user,
+                neo4j_password=settings.neo4j_password,
+                neo4j_database=settings.neo4j_database,
+                initialize=True,
+            )
+        )
+        logger.info("✓ Initialized test orchestrator with Neo4j connection")
+        return orchestrator
+    except Exception as e:
+        logger.warning(f"⚠ Failed to initialize orchestrator: {e}")
+        logger.warning("  Test data will NOT be persisted to Neo4j")
+        return None
+
+
 def initialize_test_state():
     """Initialize session state for placement test."""
     if "test_config" not in st.session_state:
         st.session_state.test_config = get_placement_test()
-        logger.info(f"✓ Loaded test config with {len(st.session_state.test_config.sections)} sections")
+        logger.info(
+            f"✓ Loaded test config with {len(st.session_state.test_config.sections)} sections"
+        )
 
     if "test_engine" not in st.session_state:
         st.session_state.test_engine = PlacementTestEngine(st.session_state.test_config)
         logger.info("✓ Initialized test engine")
+
+    if "test_orchestrator" not in st.session_state:
+        st.session_state.test_orchestrator = _initialize_orchestrator()
+
+    if "test_session_id" not in st.session_state:
+        st.session_state.test_session_id = None
 
     if "test_started" not in st.session_state:
         st.session_state.test_started = False
@@ -67,7 +104,7 @@ def initialize_test_state():
         st.session_state.current_question_index = 0
 
     if "answers" not in st.session_state:
-        st.session_state.answers = {}  # {question_id: selected_answer}
+        st.session_state.answers = {}
 
     if "test_completed" not in st.session_state:
         st.session_state.test_completed = False
@@ -122,14 +159,53 @@ def skip_question():
 def complete_test():
     """Complete the test and calculate results."""
     logger.info(f"✓ Test completed by {student_id}")
-    logger.info(f"  Answered {len(st.session_state.answers)} out of {get_total_questions()} questions")
+    logger.info(
+        f"  Answered {len(st.session_state.answers)} out of {get_total_questions()} questions"
+    )
 
+    # Score test with engine
     result = engine.score_test(st.session_state.answers, student_id=student_id)
     st.session_state.test_result = result
     st.session_state.test_completed = True
 
-    logger.info(f"  Score: {result.total_correct}/{result.total_questions} ({result.score_percentage:.1f}%)")
+    logger.info(
+        f"  Score: {result.total_correct}/{result.total_questions} "
+        f"({result.score_percentage:.1f}%)"
+    )
     logger.info(f"  Determined Level: {result.determined_level.value}")
+
+    # Persist to Neo4j if orchestrator available
+    orchestrator: PlacementTestOrchestrator | None = st.session_state.get("test_orchestrator")
+    if orchestrator:
+        try:
+            # Record test result in graph
+            _persist_result_to_graph(orchestrator, result, student_id)
+            logger.info(f"✓ Test result persisted to Neo4j for {student_id}")
+        except Exception as e:
+            logger.warning(f"⚠ Failed to persist result to Neo4j: {e}")
+            st.warning("⚠ Test result saved locally but not to database")
+
+
+def _persist_result_to_graph(orchestrator: PlacementTestOrchestrator, result, student_id: str):
+    """Persist test result to Neo4j graph.
+
+    Args:
+        orchestrator: PlacementTestOrchestrator instance
+        result: PlacementTestResult from engine
+        student_id: Student identifier
+    """
+    # Run async operation in sync context
+    session_id = st.session_state.get("test_session_id")
+    if not session_id:
+        session_id = f"session_{datetime.now().isoformat()}"
+
+    asyncio.run(
+        orchestrator.complete_test(
+            student_id=student_id,
+            session_id=session_id,
+            answers=st.session_state.answers,
+        )
+    )
 
 
 # ============================================================================
@@ -137,16 +213,40 @@ def complete_test():
 # ============================================================================
 
 # --- Header ---
-st.title("📋 Italian Language Placement Test")
 st.markdown(
     """
-    Determine your Italian language proficiency level (A1–C1).
-    
-    **How it works:**
-    - Answer 50 questions across 5 levels (A1, A2, B1, B2, C1)
-    - Your level = the highest section where you score ≥ 7/10
-    - Takes approximately 20-30 minutes
+    <div class="main-header">
+        <h1>📋 Italian Language Placement Test</h1>
+        <h2>Determine your Italian language proficiency level (A1–C1)</h2>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
     """
+    <div class="card" style="background: #f8f9fa; margin: 2rem 0;">
+        <h3 style="color: var(--primary-color);">📖 How it works</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+            <div style="background: var(--white); padding: 1rem; border-radius: 8px; box-shadow: var(--shadow);">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+                <strong>50 questions</strong><br>
+                <small style="color: #666;">Across 5 levels (A1, A2, B1, B2, C1)</small>
+            </div>
+            <div style="background: var(--white); padding: 1rem; border-radius: 8px; box-shadow: var(--shadow);">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
+                <strong>Smart scoring</strong><br>
+                <small style="color: #666;">Level = highest section with ≥ 7/10 correct</small>
+            </div>
+            <div style="background: var(--white); padding: 1rem; border-radius: 8px; box-shadow: var(--shadow);">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏱️</div>
+                <strong>~25 minutes</strong><br>
+                <small style="color: #666;">Average time to complete</small>
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ============================================================================
@@ -154,7 +254,15 @@ st.markdown(
 # ============================================================================
 
 if not st.session_state.test_started:
-    st.markdown("---")
+    st.markdown(
+        """
+        <div class="card" style="background: #fffaf0; border-left: 4px solid var(--accent-color);">
+            <h3 style="color: var(--accent-color);">🚀 Ready to begin?</h3>
+            <p style="color: #555;">This test will help us determine the right starting level for your Italian lessons.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -162,12 +270,12 @@ if not st.session_state.test_started:
         st.markdown(
             """
             This test will help us determine the right starting level for your Italian lessons.
-            
+
             **Scoring system:**
             - Each section has 10 questions
             - You need at least 7 correct answers to "pass" a section
             - Your final level = highest section passed
-            
+
             **Levels:**
             - 🔤 **A1:** Beginner (greetings, basic grammar)
             - 🔤 **A2:** Elementary (present tense, daily topics)
@@ -207,7 +315,12 @@ elif not st.session_state.test_completed:
     with col1:
         st.metric("Level", current_q.level.value)
     with col2:
-        st.metric("Grammar Topic", current_q.grammar_point[:40] + "..." if len(current_q.grammar_point) > 40 else current_q.grammar_point)
+        st.metric(
+            "Grammar Topic",
+            current_q.grammar_point[:40] + "..."
+            if len(current_q.grammar_point) > 40
+            else current_q.grammar_point,
+        )
     with col3:
         answered = len(st.session_state.answers)
         st.metric("Answered", f"{answered}/{total}")
@@ -228,7 +341,9 @@ elif not st.session_state.test_completed:
         with col1:
             st.write(f"**{option.key.upper()}**")
         with col2:
-            if st.button(option.text, use_container_width=True, key=f"opt_{current_q.id}_{option.key}"):
+            if st.button(
+                option.text, use_container_width=True, key=f"opt_{current_q.id}_{option.key}"
+            ):
                 st.session_state.answers[current_q.id] = option.key
                 logger.info(f"✓ Question {current_q.id}: Selected {option.key} ({option.text})")
                 st.rerun()
@@ -247,7 +362,11 @@ elif not st.session_state.test_completed:
     nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
 
     with nav_col1:
-        if st.button("⬅️ Indietro", use_container_width=True, disabled=st.session_state.current_question_index == 0):
+        if st.button(
+            "⬅️ Indietro",
+            use_container_width=True,
+            disabled=st.session_state.current_question_index == 0,
+        ):
             move_to_previous_question()
             st.rerun()
 
@@ -270,7 +389,11 @@ elif not st.session_state.test_completed:
     with nav_col5:
         if st.button("✅ Fine", use_container_width=True):
             if len(st.session_state.answers) < total:
-                if st.warning(f"⚠️ Hai risposto solo a {len(st.session_state.answers)}/{total} domande. Vuoi terminare comunque?"):
+                warning_msg = (
+                    f"⚠️ Hai risposto solo a {len(st.session_state.answers)}"
+                    f"/{total} domande. Vuoi terminare comunque?"
+                )
+                if st.warning(warning_msg):
                     complete_test()
                     st.rerun()
             else:
@@ -289,16 +412,54 @@ else:
         st.stop()
 
     # --- Results Header ---
-    st.markdown("---")
-    st.title("🎉 Test Completed!")
+    st.markdown(
+        """
+        <div class="main-header">
+            <h1>🎉 Test Completed!</h1>
+            <h2>Here are your placement test results</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Score", f"{result.total_correct}/{result.total_questions}", f"{result.score_percentage:.1f}%")
+        st.markdown(
+            """
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 2rem; color: var(--primary-color); margin-bottom: 0.5rem;">📊</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.metric(
+            "Total Score",
+            f"{result.total_correct}/{result.total_questions}",
+            f"{result.score_percentage:.1f}%",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
     with col2:
+        st.markdown(
+            """
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 2rem; color: var(--accent-color); margin-bottom: 0.5rem;">🎓</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.metric("Your Level", result.determined_level.value, "CEFR")
+        st.markdown("</div>", unsafe_allow_html=True)
     with col3:
+        st.markdown(
+            """
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 2rem; color: var(--success-color); margin-bottom: 0.5rem;">✅</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.metric("Accuracy", f"{result.accuracy}%")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # --- Level Badge ---
     st.markdown("---")
@@ -317,12 +478,25 @@ else:
         CEFRLevel.C1: "Impressive! C1 covers literary and sophisticated Italian.",
     }
 
-    st.success(f"### {level_colors[result.determined_level]}")
-    st.info(f"**{level_descriptions[result.determined_level]}**")
+    st.markdown(
+        f"""
+        <div class="card" style="background: #f0fff4; border-left: 4px solid var(--success-color);">
+            <h3 style="color: var(--success-color); margin-top: 0;">{level_colors[result.determined_level]}</h3>
+            <p style="color: #555;">{level_descriptions[result.determined_level]}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # --- Section Performance ---
-    st.markdown("---")
-    st.subheader("📊 Performance by Section")
+    st.markdown(
+        """
+        <div class="card">
+            <h3 style="color: var(--primary-color);">📊 Performance by Section</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     section_summary = engine.get_section_summary()
     perf_data = []
@@ -335,14 +509,17 @@ else:
             max_score = section_info["question_count"]
             passing = section_info["passing_score"]
             status = "✅ PASSED" if score >= passing else "❌ FAILED"
-            perf_data.append({
-                "Section": f"{section_letter} ({level})",
-                "Score": f"{score}/{max_score}",
-                "Status": status,
-            })
+            perf_data.append(
+                {
+                    "Section": f"{section_letter} ({level})",
+                    "Score": f"{score}/{max_score}",
+                    "Status": status,
+                }
+            )
 
     try:
         import pandas as pd
+
         perf_df = pd.DataFrame(perf_data)
         st.dataframe(perf_df, use_container_width=True, hide_index=True)
     except ImportError:
@@ -359,7 +536,10 @@ else:
             if question:
                 with st.expander(f"Q{error.question_id}: {question.question_text[:60]}..."):
                     st.write(f"**Your answer:** {error.selected_answer.upper()}")
-                    st.write(f"**Correct answer:** {question.correct_answer.upper()} - {question.correct_answer_text}")
+                    correct_answer_display = (
+                        f"{question.correct_answer.upper()} - {question.correct_answer_text}"
+                    )
+                    st.write(f"**Correct answer:** {correct_answer_display}")
                     st.write(f"**Grammar point:** {question.grammar_point}")
 
     # --- Next Steps ---
@@ -368,11 +548,11 @@ else:
     st.markdown(
         f"""
         ✅ Your placement level is **{result.determined_level.value}**
-        
+
         1. Return to the dashboard
         2. Select your lessons starting at level **{result.determined_level.value}**
         3. Progress at your own pace
-        
+
         Good luck! 🇮🇹
         """
     )
@@ -385,7 +565,13 @@ else:
     with col2:
         if st.button("🔄 Retake Test", use_container_width=True):
             # Reset test state
-            for key in ["test_started", "current_question_index", "answers", "test_completed", "test_result"]:
+            for key in [
+                "test_started",
+                "current_question_index",
+                "answers",
+                "test_completed",
+                "test_result",
+            ]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()

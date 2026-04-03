@@ -4,13 +4,14 @@ Pydantic models for the Italian Placement Test system.
 Provides type-safe data structures for questions, sections, and test configuration.
 """
 
-from typing import Dict, List, Optional
 from enum import Enum
+
 from pydantic import BaseModel, Field
 
 
 class CEFRLevel(str, Enum):
     """Common European Framework of Reference levels."""
+
     A1 = "A1"
     A2 = "A2"
     B1 = "B1"
@@ -21,25 +22,22 @@ class CEFRLevel(str, Enum):
 
 class QuestionOption(BaseModel):
     """Single answer option."""
+
     key: str = Field(..., description="Option key (a, b, c, d)")
     text: str = Field(..., description="Option text")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "key": "a",
-                "text": "prenotare"
-            }
-        }
+        json_schema_extra = {"example": {"key": "a", "text": "prenotare"}}
 
 
 class Question(BaseModel):
     """Complete question with metadata."""
+
     id: int = Field(..., description="Unique question ID")
     level: CEFRLevel = Field(..., description="CEFR level (A1-C1)")
     section: str = Field(..., description="Section letter (A-E)")
     question_text: str = Field(..., description="Question in Italian")
-    options: List[QuestionOption] = Field(..., description="Answer options")
+    options: list[QuestionOption] = Field(..., description="Answer options")
     correct_answer: str = Field(..., description="Correct answer key (a, b, c, d)")
     correct_answer_text: str = Field(..., description="Correct answer text")
     grammar_point: str = Field(..., description="Grammar concept being tested")
@@ -55,40 +53,37 @@ class Question(BaseModel):
                     {"key": "a", "text": "prenotare"},
                     {"key": "b", "text": "cucinare"},
                     {"key": "c", "text": "portare"},
-                    {"key": "d", "text": "ordinare"}
+                    {"key": "d", "text": "ordinare"},
                 ],
                 "correct_answer": "a",
                 "correct_answer_text": "prenotare",
-                "grammar_point": "Infinitive collocations: prenotare un tavolo"
+                "grammar_point": "Infinitive collocations: prenotare un tavolo",
             }
         }
 
 
 class TestSection(BaseModel):
     """Section of the placement test."""
+
     level: CEFRLevel = Field(..., description="CEFR level for this section")
     section_letter: str = Field(..., description="Section identifier (A-E)")
     passing_score: int = Field(default=7, description="Minimum score to advance (out of 10)")
-    questions: List[Question] = Field(..., description="Questions in this section")
+    questions: list[Question] = Field(..., description="Questions in this section")
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "level": "A1",
-                "section_letter": "A",
-                "passing_score": 7,
-                "questions": []
-            }
+            "example": {"level": "A1", "section_letter": "A", "passing_score": 7, "questions": []}
         }
 
 
 class PlacementTestConfig(BaseModel):
     """Configuration and metadata for the entire placement test."""
+
     name: str = Field(..., description="Test name")
     description: str = Field(..., description="Test description")
     language: str = Field(default="Italian", description="Language being tested")
     version: str = Field(default="1.0.0", description="Test version")
-    sections: List[TestSection] = Field(..., description="Test sections by level")
+    sections: list[TestSection] = Field(..., description="Test sections by level")
 
     class Config:
         json_schema_extra = {
@@ -97,13 +92,14 @@ class PlacementTestConfig(BaseModel):
                 "description": "50 questions A1–C1",
                 "language": "Italian",
                 "version": "1.0.0",
-                "sections": []
+                "sections": [],
             }
         }
 
 
 class UserAnswer(BaseModel):
     """User's answer to a question."""
+
     question_id: int
     selected_answer: str
     is_correct: bool = Field(default=False)
@@ -112,14 +108,17 @@ class UserAnswer(BaseModel):
 
 class PlacementTestResult(BaseModel):
     """Result of a completed placement test."""
-    student_id: Optional[str] = None
+
+    student_id: str | None = None
     total_questions: int
     total_correct: int
     score_percentage: float
     determined_level: CEFRLevel
-    section_scores: Dict[str, int] = Field(..., description="Score per section (e.g., {'A': 8, 'B': 7})")
-    answers: List[UserAnswer] = Field(default_factory=list, description="All user answers")
-    timestamp: Optional[str] = None
+    section_scores: dict[str, int] = Field(
+        ..., description="Score per section (e.g., {'A': 8, 'B': 7})"
+    )
+    answers: list[UserAnswer] = Field(default_factory=list, description="All user answers")
+    timestamp: str | None = None
 
     @property
     def accuracy(self) -> float:

@@ -145,9 +145,24 @@ def get_student_id() -> str | None:
 def render_sidebar_header():
     """Render consistent sidebar header with branding."""
     logger.debug("🎨 Rendering sidebar header...")
-    st.markdown("### 📚 ItalianOllama")
-    st.markdown(f"**ID:** `{st.session_state.student_id}`")
-    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align: center; padding: 1rem 0;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📚</div>
+            <h3 style="color: var(--primary-color); margin: 0;">ItalianOllama</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div style="background: var(--light-bg); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; text-align: center;">
+            <small style="color: #666;">ID Studente</small><br>
+            <strong style="color: var(--primary-color); font-size: 0.9rem;">{st.session_state.student_id}</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     logger.debug("✓ Sidebar header rendered")
 
 
@@ -199,10 +214,37 @@ def render_sidebar_full(current_page: str = ""):
             logger.debug(
                 f"✓ Profile retrieved - name: {profile.get('name', 'N/A')}, level: {profile.get('level', 'N/A')}"
             )
-            st.markdown(f"**Nome:** {profile.get('name', 'Studente')}")
-            st.markdown(f"**Livello:** {profile.get('level', 'N/A')}")
-            st.markdown(f"**XP:** {profile.get('total_xp', 0)} ⭐")
-            st.markdown(f"**Streak:** {profile.get('current_streak', 0)} 🔥")
+            st.markdown(
+                """
+                <div style="background: var(--light-bg); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <h4 style="color: var(--secondary-color); margin: 0 0 0.75rem 0;">👤 Il tuo profilo</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem;">
+                        <div>
+                            <small style="color: #666;">Nome</small><br>
+                            <strong>{}</strong>
+                        </div>
+                        <div>
+                            <small style="color: #666;">Livello</small><br>
+                            <strong>{}</strong>
+                        </div>
+                        <div>
+                            <small style="color: #666;">XP Totali</small><br>
+                            <strong style="color: var(--primary-color);">{} ⭐</strong>
+                        </div>
+                        <div>
+                            <small style="color: #666;">Streak</small><br>
+                            <strong style="color: var(--accent-color);">{} 🔥</strong>
+                        </div>
+                    </div>
+                </div>
+                """.format(
+                    profile.get("name", "Studente"),
+                    profile.get("level", "N/A"),
+                    profile.get("total_xp", 0),
+                    profile.get("current_streak", 0),
+                ),
+                unsafe_allow_html=True,
+            )
         else:
             logger.warning(f"⚠️ Profile not found for student {st.session_state.student_id}")
 
@@ -289,8 +331,20 @@ def success_card(title: str, message: str):
 def skill_progress_bar(name: str, xp: int, progress: float):
     """Render a skill with progress bar."""
     with st.container(border=True):
-        st.markdown(f"**{name}**")
-        st.progress(min(progress, 1.0), text=f"{xp} XP")
+        st.markdown(
+            f"""
+            <div style="padding: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <strong style="color: var(--primary-color);">{name}</strong>
+                    <span style="color: #666; font-size: 0.9rem;">{xp} XP</span>
+                </div>
+                <div style="background: var(--light-bg); border-radius: 10px; overflow: hidden;">
+                    <div style="width: {min(progress * 100, 100)}%; background: linear-gradient(90deg, var(--primary-color), var(--accent-color)); height: 8px; border-radius: 10px;"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # ============================================================================

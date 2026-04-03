@@ -26,15 +26,18 @@ class SessionManager:
     @staticmethod
     async def initialize_session(
         student_id: str | None = None,
+        use_demo_fallback: bool = True,
     ) -> dict[str, Any]:
         """Initialize session with student profile.
 
         Fetches student profile from backend and stores in session.
         If student_id is not provided, uses default from config.
         Auto-creates student if not found.
+        Falls back to demo profile if backend unreachable and use_demo_fallback=True.
 
         Args:
             student_id: Student identifier (optional)
+            use_demo_fallback: Use demo profile if backend fails (default: True)
 
         Returns:
             Student profile dictionary
@@ -51,8 +54,8 @@ class SessionManager:
         logger.info("Initializing session for student: %s", student_id)
 
         try:
+            # Try to fetch student profile from backend
             profile = await get_student_profile(student_id)
-            logger.debug("Retrieved student profile: %s", profile)
 
             # Handle student not found - auto-create
             if profile is None:
@@ -61,17 +64,25 @@ class SessionManager:
 
                 if result is None:
                     logger.error("Failed to auto-create student: %s", student_id)
-                    raise StudentNotFoundError(f"Failed to create student: {student_id}")
+                    if use_demo_fallback:
+                        logger.warning("Falling back to demo profile for: %s", student_id)
+                        profile = SessionManager._get_demo_profile(student_id)
+                    else:
+                        raise StudentNotFoundError(f"Failed to create student: {student_id}")
+                else:
+                    # Fetch the newly created student profile
+                    profile = await get_student_profile(student_id)
+                    if profile is None:
+                        logger.error("Created student but cannot fetch profile: %s", student_id)
+                        if use_demo_fallback:
+                            logger.warning("Falling back to demo profile for: %s", student_id)
+                            profile = SessionManager._get_demo_profile(student_id)
+                        else:
+                            raise StudentNotFoundError(
+                                f"Student created but profile unavailable: {student_id}"
+                            )
 
-                # Fetch the newly created student profile
-                profile = await get_student_profile(student_id)
-                if profile is None:
-                    logger.error("Created student but cannot fetch profile: %s", student_id)
-                    raise StudentNotFoundError(
-                        f"Student created but profile unavailable: {student_id}"
-                    )
-
-                logger.info("Student auto-created successfully: %s", student_id)
+                    logger.info("Student auto-created successfully: %s", student_id)
 
             # Store in session
             cl.user_session.set(SessionManager.STUDENT_ID_KEY, student_id)
@@ -91,6 +102,14 @@ class SessionManager:
 
         except StudentNotFoundError:
             logger.error("Student not found or creation failed: %s", student_id, exc_info=True)
+            if use_demo_fallback:
+                logger.warning("Using demo profile fallback for: %s", student_id)
+                profile = SessionManager._get_demo_profile(student_id)
+                cl.user_session.set(SessionManager.STUDENT_ID_KEY, student_id)
+                cl.user_session.set(SessionManager.STUDENT_PROFILE_KEY, profile)
+                cl.user_session.set(SessionManager.CEFR_LEVEL_KEY, "A1")
+                cl.user_session.set(SessionManager.CHAT_HISTORY_KEY, [])
+                return profile
             raise
         except Exception as e:
             logger.error(
@@ -99,6 +118,26 @@ class SessionManager:
                 exc_info=True,
             )
             raise
+
+    @staticmethod
+    def _get_demo_profile(student_id: str) -> dict[str, Any]:
+        """Create a demo student profile for offline/fallback mode.
+
+        Args:
+            student_id: Student identifier
+
+        Returns:
+            Demo profile dictionary
+        """
+        return {
+            "student_id": student_id,
+            "name": f"Student {student_id}",
+            "cefr_level": "A1",
+            "vocabulary_count": 0,
+            "exercise_count": 0,
+            "is_demo": True,
+            "message": "Using demo mode (backend unavailable)",
+        }
 
     @staticmethod
     def get_student_id() -> str | None:

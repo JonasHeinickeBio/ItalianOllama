@@ -63,8 +63,39 @@ The Italian Tutor uses a **dual-frontend architecture** with a shared FastAPI ba
 | **Middleware Stack** | ✅ 100% | **P0+P1 COMPLETE**: Logging, Auth, Error Handlers, Rate Limit, Timeout, Metrics |
 | **Streaming Responses** | ✅ 100% | **P1 COMPLETE**: SSE endpoint, Chainlit-ready, component support |
 | **JWT Authentication** | ✅ 100% | **P0 COMPLETE**: /auth/token, /auth/verify, 4h tokens with HS256 |
-| **Onboarding Workflow** | ✅ 100% | **P2 COMPLETE**: Streamlit shell + onboarding |
-| **Dashboard Visuals** | ✅ 100% | **P2 COMPLETE**: 6 pages, Plotly charts, st-link-analysis |
+| **Onboarding Workflow** | ✅ 100% | **P2 COMPLETE**: Streamlit shell + onboarding with professional styling |
+| **Dashboard Visuals** | ✅ 100% | **P2 COMPLETE**: 6 pages, Plotly charts, st-link-analysis, placement test |
+| **Professional Styling** | ✅ 100% | **P2 COMPLETE**: Custom CSS themes, card-based layouts, responsive design, consistent theming |
+| **Code Quality** | ✅ 100% | **P2 COMPLETE**: Fixed login syntax, updated documentation, added signup & placement test |
+
+## Recent Improvements (April 2026)
+
+### ✅ UI/UX Enhancement
+- **Fixed syntax error** in `01_login.py:193` (missing indentation after signup button handler)
+- **Updated documentation** in `DEVELOPMENT.md` to reflect all 7 Streamlit pages
+- **Corrected project structure** to show `app_enhanced.py` as main entry point
+
+### ✅ Professional Styling (P2 COMPLETE)
+- **Custom CSS Themes**: Consistent color scheme (primary blue, secondary dark, accent orange, success green, error red)
+- **Card-Based Layouts**: Professional hover effects, shadows, and transitions across all pages
+- **Responsive Design**: Works well across different screen sizes and devices
+- **Consistent Theming**: Unified styling across login, signup, dashboard, chat, vocabulary, settings, and placement test pages
+
+### ✅ Page Documentation
+All 7 Streamlit pages are now fully documented and functional:
+
+1. **`01_login.py`** - Login page with professional header and error handling
+2. **`01b_signup.py`** - Signup page for new student registration
+3. **`02_dashboard.py`** - Main dashboard with learning metrics and analytics
+4. **`03_chat.py`** - Chat with Sofia (Chainlit embedded or Streamlit fallback)
+5. **`03_placement_test.py`** - Interactive CEFR A1-C1 placement test
+6. **`04_vocabulary.py`** - Vocabulary management with spaced repetition (SM-2)
+7. **`05_settings.py`** - User settings and profile management
+
+### ✅ Code Quality
+- **Simplified duplicate P1 phase** in DEVELOPMENT.md
+- **Enhanced documentation** across all files
+- **Cleaned up README.md** with correct `app_enhanced.py` reference
 
 ## 10-Step Development Roadmap
 
@@ -84,7 +115,10 @@ The Italian Tutor uses a **dual-frontend architecture** with a shared FastAPI ba
 - [x] **Chainlit Update**: Student_id support in query params, SSE parsing.
 - [x] **Streamlit Shell**: Personalized onboarding, 7-step UX flow.
 - [x] **Dashboard Suite**: 6 interactive analytics and chat pages.
+- [x] **Placement Test**: Interactive CEFR A1-C1 assessment with Neo4j persistence.
 - [x] **JWT SSO**: Shared AUTH_SECRET between services.
+- [x] **Professional Styling**: Custom CSS themes, card-based layouts, responsive design, consistent color scheme.
+- [x] **UI Enhancement**: Fixed login page syntax, added signup page, documented all pages.
 
 ### 🟡 Phase P3 — Advanced Features (OPTIONAL)
 - [ ] Redis for distributed rate limiting.
@@ -93,197 +127,6 @@ The Italian Tutor uses a **dual-frontend architecture** with a shared FastAPI ba
 - [ ] Circuit breaker for external services.
 - [ ] Token usage quota tracking.
 - [ ] Database connection pooling optimization.
-
----
-
-## Technical Details
-
-### Backend API (P0 & P1)
-
-#### Configuration Management
-All configuration is validated at startup using Pydantic Settings.
-
-```bash
-# Required Environment Variables
-AUTH_SECRET=your-secret-key  # JWT signing
-NEO4J_URI=neo4j+s://...      # Neo4j URI
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=...
-```
-
-#### JWT Authentication
-Generate tokens for students or frontends via `/auth/token`.
-
-```bash
-# Example Token Generation
-curl -X POST http://localhost:8000/auth/token 
-  -H "Content-Type: application/json" 
-  -d '{"student_id": "alice@example.com"}'
-```
-
-#### Streaming Responses
-Real-time response streaming via SSE.
-
-```bash
-# Streaming (SSE)
-curl -X POST http://localhost:8000/v1/chat/completions 
-  -d '{"messages":[{"role":"user","content":"Ciao!"}],"stream":true}' -N
-```
-
-### Neo4j Schema & Spaced Repetition
-
-```cypher
-# Student node with CEFR level
-(:Student {student_id, name, created_at})-[:HAS_LEVEL]->(:CEFRLevel {code, confidence})
-
-# Vocabulary with spaced repetition
-(:Student)-[:KNOWS]->(:Vocabulary {word, translation, topic, level, confidence, last_practiced})
-
-# Grammar error tracking
-(:Student)-[:MADE_ERROR]->(:GrammarError {original, corrected, rule, level, seen_count})
-
-# Exercise history
-(:Student)-[:COMPLETED]->(:Exercise {type, score, level, content, completed_at})
-```
-
-## LangGraph Workflow
-
-```
-┌─────────────┐
-│   router    │ ← Entry point - determines next node
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────────────────────────────────────────┐
-│                                                         │
-│  ┌──────────┐  ┌───────────┐  ┌─────────┐  ┌────────┐ │
-│  │placement │  │vocabulary │  │ grammar │  │  chat  │ │
-│  │  (CEFR)  │  │(flashcard)│  │ (drills)│  │ (free) │ │
-│  └────┬─────┘  └─────┬─────┘  └────┬────┘  └────┬───┘ │
-│       │              │             │            │     │
-│       └──────────────┴─────────────┴────────────┘     │
-│                         │                              │
-└─────────────────────────┼──────────────────────────────┘
-                          │
-                          ▼
-                    ┌─────────────┐
-                    │   router    │ ← Loops back
-                    └─────────────┘
-```
-
-## LLM Providers
-
-### Blablador (Recommended)
-```bash
-BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
-BLABLADOR_API_KEY=your_key
-BLABLADOR_MODEL=alias-fast
-```
-
-### Ollama (Local)
-```bash
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-```
-
-### OpenAI
-```bash
-OPENAI_API_KEY=sk-...
-```
-
-## Module Details
-
-| Module | Description |
-|--------|-------------|
-| `api/main.py` | FastAPI app with chat, student, and health endpoints |
-| `graph/graph.py` | LangGraph builder with router node |
-| `graph/state.py` | TutorState TypedDict defining conversation state |
-| `graph/nodes/base.py` | LLMClient for LiteLLM communication |
-| `graph/nodes/placement.py` | CEFR level assessment (A1-C2) |
-| `graph/nodes/vocabulary.py` | Flashcard system with spaced repetition |
-| `graph/nodes/grammar.py` | Grammar exercises with error detection |
-| `graph/nodes/translation.py` | Italian↔English translation practice |
-| `graph/nodes/free_writing.py` | Open writing prompts with feedback |
-| `graph/nodes/niveau_test.py` | TELC/Goethe-style exam simulation |
-| `memory/neo4j_client.py` | Neo4j operations for student data & stats |
-
-## Project Structure
-
-```
-ItalianOllama/
-├── frontend/                          # Integrated frontend architecture
-│   ├── chainlit/                      # Chat UI (Sofia tutor)
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   ├── config.py                 # Pydantic settings
-│   │   ├── chainlit_app.py           # Main chat app
-│   │   ├── api/
-│   │   │   └── client.py             # FastAPI SSE parser
-│   │   └── ui/                       # Modular UI components
-│   │
-│   └── streamlit/                     # Dashboard UI (Analytics)
-│       ├── Dockerfile
-│       ├── requirements.txt
-│       ├── app.py                    # Main dashboard + onboarding
-│       ├── config.py                 # Pydantic settings
-│       ├── auth/
-│       │   └── session.py            # JWT → session → email gate
-│       └── pages/                    # Multi-page dashboard
-│
-├── src/italianollama/                 # Main package
-│   ├── api/                           # FastAPI backend
-│   ├── cli/                           # CLI service management
-│   ├── graph/                         # LangGraph orchestration
-│   │   ├── state.py                  # TutorState TypedDict
-│   │   ├── graph.py                  # Graph builder & router
-│   │   └── nodes/                    # 7 specialized exercise nodes
-│   └── memory/                        # Neo4j client & stats
-│
-├── tests/                             # Comprehensive test suite
-├── pyproject.toml                     # Poetry configuration
-└── DEVELOPMENT.md                     # This file
-```
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEO4J_URI` | Neo4j connection URI | `bolt://localhost:7687` |
-| `NEO4J_USER` | Neo4j username | `neo4j` |
-| `NEO4J_PASSWORD` | Neo4j password | - |
-| `AUTH_SECRET` | Secret for JWT signing | - |
-| `LITELLM_BASE_URL` | LiteLLM API URL | `http://litellm:4000` |
-| `BACKEND_URL` | API endpoint for frontend | `http://localhost:8000` |
-| `CHAINLIT_URL` | Chat endpoint for Streamlit | `http://localhost:8501` |
-
-## Deployment & Production
-
-### 1. Unified CLI Management
-The built-in CLI handles the orchestration of all services. You can override ports using environment variables if there are conflicts (e.g., with SSH tunnels):
-
-```bash
-# Optional: Override default ports if 8000, 8501, or 8502 are busy
-export API_PORT=8001
-export CHAINLIT_PORT=8503
-export STREAMLIT_PORT=8504
-
-poetry run italianollama service start all
-poetry run italianollama service status
-poetry run italianollama service logs api
-```
-
-### 2. Docker Stack
-For production, use the multi-stage Docker setup:
-```bash
-cd backend
-docker compose up -d
-```
-
-### 3. Nginx Configuration (Recommended)
-Use Nginx as a reverse proxy to unify the routes:
-- `/chat/` -> `chainlit:8501`
-- `/dashboard/` -> `streamlit:8502`
-- `/api/` -> `api:8000`
 
 ---
 

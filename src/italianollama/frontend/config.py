@@ -21,6 +21,10 @@ class Settings(BaseSettings):
         app_name: Display name in Chainlit UI
         chat_placeholder: Placeholder text for chat input
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        neo4j_uri: Neo4j database URI
+        neo4j_user: Neo4j username
+        neo4j_password: Neo4j password
+        neo4j_database: Neo4j database name (optional)
     """
 
     # ============ Backend Connection ============
@@ -49,6 +53,27 @@ class Settings(BaseSettings):
     chat_placeholder: str = Field(
         default="Scrivi un messaggio... (Write a message...)",
         description="Placeholder text for chat input",
+    )
+
+    # ============ Neo4j Configuration ============
+    neo4j_uri: str = Field(
+        default="neo4j://localhost:7687",
+        description="Neo4j database URI (e.g., neo4j://localhost:7687)",
+    )
+
+    neo4j_user: str = Field(
+        default="neo4j",
+        description="Neo4j username",
+    )
+
+    neo4j_password: str = Field(
+        default="password",
+        description="Neo4j password",
+    )
+
+    neo4j_database: str = Field(
+        default="neo4j",
+        description="Neo4j database name",
     )
 
     # ============ Logging ============

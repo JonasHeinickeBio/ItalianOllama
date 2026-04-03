@@ -47,7 +47,15 @@ def get_profile_data():
 
 
 # === PAGE CONTENT ===
-st.title("⚙️ Impostazioni e Profilo")
+st.markdown(
+    """
+    <div class="main-header">
+        <h1>⚙️ Impostazioni e Profilo</h1>
+        <h2>Gestisci il tuo account e personalizza l'applicazione</h2>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 tab1, tab2, tab3, tab4 = st.tabs(["👤 Profilo", "🔐 Autenticazione", "❓ FAQ", "💡 Supporto"])
 
