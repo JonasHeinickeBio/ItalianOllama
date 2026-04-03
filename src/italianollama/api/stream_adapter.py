@@ -38,8 +38,11 @@ async def stream_graph_response(
         # For true streaming, we'd need to use a callback system
         # For now, we'll mock streaming by yielding tokens one at a time
 
-        # Invoke the graph
-        result = await graph.ainvoke(input_data)
+        # Invoke the graph with recursion limit to prevent infinite loops
+        result = await graph.ainvoke(
+            input_data,
+            {"recursion_limit": 100},
+        )
 
         # Extract assistant message
         response_text = "Ciao! Sono il tuo tutore di italiano. Come posso aiutarti oggi?"

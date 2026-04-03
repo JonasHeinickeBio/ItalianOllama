@@ -495,7 +495,8 @@ async def chat(message: ChatMessage, req: Request):
                 "current_level": None,
                 "exercise_type": None,
                 "exercise_state": {},
-            }
+            },
+            {"recursion_limit": 100},  # Prevent infinite loops
         )
 
         # Extract assistant response
@@ -546,6 +547,34 @@ async def create_student(student: StudentCreate, req: Request):
         }
     except Exception as e:
         logger.error(f"Error creating student: {e}", exc_info=True)
+        raise
+
+
+@app.get("/students/{student_id}")
+async def get_student_endpoint(
+    student_id: str,
+    req: Request,
+):
+    """Get student info.
+
+    Returns student profile and basic info.
+    No authentication required for public student lookup.
+    """
+    logger.info(f"Fetching student info: {student_id}")
+
+    client = get_neo4j_client()
+
+    try:
+        student = await client.get_student(student_id)
+        if not student:
+            raise NotFoundError("Student", f"Student {student_id} not found")
+
+        logger.debug(f"Student info: {student.get('student_id')}")
+        return student
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching student: {e}", exc_info=True)
         raise
 
 

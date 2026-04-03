@@ -16,6 +16,11 @@ class FakeNeo4jClient:
     """In-memory fake Neo4j client for functional endpoint tests."""
 
     students: dict[str, dict[str, Any]] = field(default_factory=dict)
+    database: str = "neo4j"
+    _driver: Any = None
+
+    def __post_init__(self):
+        self._driver = FakeDriver()
 
     async def verify_connectivity(self) -> bool:
         return True
@@ -58,11 +63,55 @@ class FakeNeo4jClient:
     async def get_test_readiness(self, student_id: str) -> list[dict[str, Any]]:
         return [{"exam": "CILS B1", "readiness": 0.7}]
 
+    async def get_learning_velocity(self, student_id: str, days: int = 7) -> dict[str, Any]:
+        return {
+            "student_id": student_id,
+            "period_days": days,
+            "exercises_completed": 10,
+            "velocity": 1.43,
+            "unit": "exercises/day",
+        }
+
+    async def get_student_skills(self, student_id: str) -> dict[str, Any]:
+        return {
+            "student_id": student_id,
+            "grammar": 85.0,
+            "vocabulary": 90.0,
+            "placement_level": "A2",
+            "last_assessed": "2024-01-01",
+        }
+
+
+class FakeDriver:
+    """Fake Neo4j driver for testing analytics queries."""
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        async def run(self, query: str, **params):
+            class FakeResult:
+                async def single(self):
+                    return None
+
+            return FakeResult()
+
+    def __init__(self):
+        self._session = self.FakeSession()
+
+    def session(self, database=None):
+        return self._session
+
 
 class FakeGraph:
     """Simple fake tutor graph for API functional tests."""
 
-    async def ainvoke(self, state: dict[str, Any]) -> dict[str, Any]:
+    async def ainvoke(
+        self, state: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         user_text = state.get("messages", [{"content": ""}])[-1].get("content", "")
         return {
             "messages": state.get("messages", [])
@@ -82,6 +131,15 @@ def api_client(monkeypatch: pytest.MonkeyPatch, fake_neo4j_client: FakeNeo4jClie
 
     monkeypatch.setattr(api_main, "get_neo4j_client", lambda: fake_neo4j_client)
     monkeypatch.setattr(api_main, "get_tutor_graph", lambda: FakeGraph())
+
+    # Mock get_current_student to return a fixed student_id (for testing)
+    # Import after patching to avoid issues with the import
+    from italianollama.api.middleware import auth as auth_module
+
+    async def mock_get_current_student(request):
+        return "test-student"
+
+    monkeypatch.setattr(auth_module, "get_current_student", mock_get_current_student)
 
     with TestClient(api_main.app) as client:
         yield client

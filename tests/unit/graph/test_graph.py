@@ -135,7 +135,7 @@ class TestChatNode:
             result = await chat_node(state, mock_neo4j_client)
 
         assert result.get("response") is not None
-        assert result.get("should_continue") is True
+        assert result.get("should_continue") is False  # Stop by default to prevent infinite loops
         messages = result.get("messages", [])
         assert len(messages) >= len(state["messages"])
 
