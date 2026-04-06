@@ -158,6 +158,22 @@ class HealthResponse(BaseModel):
     litellm: str
 
 
+class VocabularyCreate(BaseModel):
+    """Create a new vocabulary entry."""
+
+    student_id: str
+    italian_word: str
+    german_word: str
+    part_of_speech: str
+    cefr_level: str
+    topic: str | None = None
+    article: str | None = None
+    gender: str | None = None
+    plural: str | None = None
+    italian_plural: str | None = None
+    vocabulary_type: str = "self-made"
+
+
 # ============ Core Routes ============
 
 
@@ -486,13 +502,18 @@ async def chat(message: ChatMessage, req: Request):
         raise ValidationError("message cannot be empty")
 
     graph = get_tutor_graph()
+    client = get_neo4j_client()
 
     try:
+        # Load existing student level from Neo4j
+        student_data = await client.get_student(message.student_id)
+        existing_level = student_data.get("cefr_level") if student_data else None
+
         result = await graph.ainvoke(
             {
                 "student_id": message.student_id,
                 "messages": [{"role": "user", "content": message.message}],
-                "current_level": None,
+                "current_level": existing_level,
                 "exercise_type": None,
                 "exercise_state": {},
             },
@@ -518,6 +539,58 @@ async def chat(message: ChatMessage, req: Request):
 
 
 # ============ Student Management Routes ============
+
+
+@app.post("/vocabulary")
+async def create_vocabulary(
+    vocab: VocabularyCreate,
+    current_student: str = Depends(get_current_student),
+):
+    """Create a new vocabulary entry.
+
+    Students can only create vocabulary for themselves.
+    """
+    if current_student != vocab.student_id:
+        raise AuthenticationError("Access denied - can only create vocabulary for yourself")
+
+    logger.info(f"Creating vocabulary: {vocab.italian_word} for {vocab.student_id}")
+
+    if not vocab.italian_word or not vocab.italian_word.strip():
+        raise ValidationError("italian_word is required")
+
+    if not vocab.german_word or not vocab.german_word.strip():
+        raise ValidationError("german_word (translation) is required")
+
+    client = get_neo4j_client()
+
+    try:
+        await client.add_vocabulary(
+            student_id=vocab.student_id,
+            word=vocab.italian_word.strip(),
+            definition=vocab.german_word.strip(),
+            topic=vocab.topic or "general",
+            confidence=0.5,
+            article=vocab.article or "",
+            gender=vocab.gender or "",
+            plural=vocab.plural or "",
+            cefr_level=vocab.cefr_level,
+            part_of_speech=vocab.part_of_speech,
+            italian_plural=vocab.italian_plural or "",
+            german_word=vocab.german_word.strip(),
+            vocabulary_type=vocab.vocabulary_type,
+        )
+        logger.info(f"Vocabulary created: {vocab.italian_word}")
+
+        return {
+            "status": "created",
+            "word": vocab.italian_word,
+            "translation": vocab.german_word,
+            "part_of_speech": vocab.part_of_speech,
+            "cefr_level": vocab.cefr_level,
+        }
+    except Exception as e:
+        logger.error(f"Error creating vocabulary: {e}", exc_info=True)
+        raise
 
 
 @app.post("/students")
@@ -631,9 +704,40 @@ async def get_student_stats(
 async def get_student_vocabulary(
     student_id: str,
     limit: int = 50,
+    vocabulary_type: str | None = None,
     current_student: str = Depends(get_current_student),
 ):
     """Get student's vocabulary with confidence scores.
+
+    Requires valid JWT token. Students can only access their own vocabulary.
+
+    Args:
+        student_id: Student ID
+        limit: Maximum number of words
+        vocabulary_type: Filter by type (premade, self-made, or None for all)
+    """
+    if current_student != student_id:
+        raise AuthenticationError("Access denied to this student's data")
+
+    client = get_neo4j_client()
+    return await client.get_student_vocabulary(student_id, limit=limit)
+
+
+@app.get("/vocabulary/{student_id}")
+async def get_vocabulary_legacy(
+    student_id: str,
+    due_for_review: bool = False,
+    limit: int = 50,
+    vocabulary_type: str | None = None,
+    current_student: str = Depends(get_current_student),
+):
+    """Get student's vocabulary (legacy endpoint for frontend compatibility).
+
+    Args:
+        student_id: Student ID
+        due_for_review: Filter by review status (currently ignored, returns all)
+        limit: Maximum number of vocabulary items
+        vocabulary_type: Filter by type (premade, self-made, or None for all)
 
     Requires valid JWT token. Students can only access their own vocabulary.
     """
@@ -641,7 +745,8 @@ async def get_student_vocabulary(
         raise AuthenticationError("Access denied to this student's data")
 
     client = get_neo4j_client()
-    return await client.get_student_vocabulary(student_id, limit=limit)
+    vocabulary = await client.get_vocabulary(student_id, limit=limit, vocabulary_type=vocabulary_type)
+    return {"vocabulary": vocabulary}
 
 
 @app.get("/api/student/{student_id}/grammar-errors")

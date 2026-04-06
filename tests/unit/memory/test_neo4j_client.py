@@ -21,7 +21,7 @@ class TestNeo4jClient:
     @pytest.fixture
     def mock_driver(self):
         """Create a mock driver with session."""
-        with patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver") as mock_driver:
+        with patch("italianollama.memory.base.AsyncGraphDatabase.driver") as mock_driver:
             mock_session = MagicMock()
             mock_session.run = AsyncMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -58,7 +58,7 @@ class TestNeo4jClient:
     @pytest.mark.asyncio
     async def test_neo4j_client_connect(self, neo4j_client):
         """Test Neo4j client connect method."""
-        with patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver") as mock_driver:
+        with patch("italianollama.memory.base.AsyncGraphDatabase.driver") as mock_driver:
             mock_driver_instance = MagicMock()
             mock_driver.return_value = mock_driver_instance
 
@@ -70,7 +70,7 @@ class TestNeo4jClient:
     @pytest.mark.asyncio
     async def test_neo4j_client_close(self, neo4j_client):
         """Test Neo4j client close method."""
-        with patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver") as mock_driver:
+        with patch("italianollama.memory.base.AsyncGraphDatabase.driver") as mock_driver:
             mock_driver_instance = MagicMock()
             mock_driver_instance.close = AsyncMock()
             mock_driver.return_value = mock_driver_instance

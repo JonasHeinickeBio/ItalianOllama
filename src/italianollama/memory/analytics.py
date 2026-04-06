@@ -115,13 +115,14 @@ class AnalyticsManager(Neo4jBaseClient):
             label: labels(node)[0],
             properties: properties(node)
         }) AS nodes,
-        collect(DISTINCT {
+        all_rels AS all_rels
+        UNWIND all_rels AS rel
+        WITH nodes, collect(DISTINCT {
             id: elementId(rel),
             source: elementId(startNode(rel)),
             target: elementId(endNode(rel)),
             type: type(rel)
         }) AS links
-        FROM all_rels AS rel
         RETURN nodes, links
         LIMIT $max_nodes
         """
@@ -167,12 +168,13 @@ class AnalyticsManager(Neo4jBaseClient):
         query = """
         MATCH (s:Student {student_id: $student_id})-[rel:MADE_ERROR]->(c:GrammarError)
         OPTIONAL MATCH (c)<-[:VIOLATES]-(t:ExerciseTemplate)
+        WITH c, rel, collect(DISTINCT t.template_id) AS templates
         RETURN {
             concept_id: c.rule,
             title: c.rule,
             mastery: 1 - (toFloat(rel.error_count) / 10),
             common_mistakes: c.context,
-            practice_templates: collect(DISTINCT t.template_id)
+            practice_templates: templates
         } AS concept
         ORDER BY rel.error_count DESC
         LIMIT 10

@@ -27,7 +27,7 @@ class TestNeo4jClientBasics:
         """Test client connect method."""
         client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
         
-        with patch('italianollama.memory.neo4j_client.AsyncGraphDatabase') as mock_driver_class:
+        with patch('italianollama.memory.base.AsyncGraphDatabase') as mock_driver_class:
             mock_driver = MagicMock()
             mock_driver_class.driver.return_value = mock_driver
             

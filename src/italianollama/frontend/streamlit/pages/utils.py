@@ -181,6 +181,7 @@ def render_sidebar_navigation(current_page: str = "") -> str:
         "📊 Dashboard": "pages/02_dashboard.py",
         "💬 Chat": "pages/03_chat.py",
         "📝 Vocabolario": "pages/04_vocabulary.py",
+        "deepl DeepL Tool": "pages/06_deepl_tool.py",
         "⚙️ Impostazioni": "pages/05_settings.py",
     }
 
@@ -358,6 +359,7 @@ def render_page_navigation(exclude_page: str = ""):
         "📊 Dashboard": "pages/02_dashboard.py",
         "💬 Chat": "pages/03_chat.py",
         "📝 Vocabolario": "pages/04_vocabulary.py",
+        "deepl DeepL Tool": "pages/06_deepl_tool.py",
         "⚙️ Impostazioni": "pages/05_settings.py",
     }
 

@@ -78,7 +78,7 @@ reaction_on_message_received = false
 
 [features.mcp]
     # Enable Model Context Protocol (MCP) features
-    enabled = false
+    enabled = true
 
 [features.mcp.sse]
     enabled = true
@@ -92,6 +92,48 @@ reaction_on_message_received = false
     # Only need the base name of the executable, e.g. "npx", not "/usr/bin/npx".
     # Please don't comment this line for now, we need it to parse the executable name.
     allowed_executables = [ "npx", "uvx" ]
+
+[[features.mcp.servers]]
+    name = "git"
+    description = "Tools to read, search, and manipulate Git repositories"
+    command = "uvx"
+    args = ["git-mcp-server"]
+
+[[features.mcp.servers]]
+    name = "fetch"
+    description = "Web content fetching and conversion for efficient LLM usage"
+    command = "uvx"
+    args = ["fetch-mcp-server"]
+
+[[features.mcp.servers]]
+    name = "memory"
+    description = "Knowledge graph-based persistent memory system"
+    command = "uvx"
+    args = ["memory-mcp-server"]
+
+[[features.mcp.servers]]
+    name = "sequentialthinking"
+    description = "Dynamic and reflective problem-solving through thought sequences"
+    command = "uvx"
+    args = ["sequentialthinking-mcp-server"]
+
+[[features.mcp.servers]]
+    name = "time"
+    description = "Time and timezone conversion capabilities"
+    command = "uvx"
+    args = ["time-mcp-server"]
+
+[[features.mcp.servers]]
+    name = "brave-search"
+    description = "Web and local search using Brave's Search API"
+    command = "uvx"
+    args = ["brave-search-mcp-server"]
+
+[[features.mcp.servers]]
+    name = "postgres"
+    description = "Read-only database access with schema inspection"
+    command = "uvx"
+    args = ["postgres-mcp-server"]
 
 [UI]
 # Name of the assistant.

@@ -308,3 +308,5 @@ docker exec neo4j cypher-shell -u neo4j -p password \
 - [Backend Architecture](backend.md)
 - [Neo4j Client Code](../development/debugging.md#neo4j)
 - [Troubleshooting](troubleshooting/common-issues.md)
+- [Flashcard Review](../features/flashcard-review.md)
+- [Session Tracking](../features/session-tracking.md)

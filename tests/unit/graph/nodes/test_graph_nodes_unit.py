@@ -239,7 +239,7 @@ class TestNeo4jClientUnit:
     """Test Neo4j client unit."""
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_set_student_level(self, mock_driver):
         """Test setting student level."""
         from italianollama.memory.neo4j_client import Neo4jClient
@@ -266,7 +266,7 @@ class TestNeo4jClientUnit:
         mock_session.run.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_update_vocabulary_confidence(self, mock_driver):
         """Test updating vocabulary confidence."""
         from italianollama.memory.neo4j_client import Neo4jClient
@@ -293,7 +293,7 @@ class TestNeo4jClientUnit:
         mock_session.run.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_record_grammar_error(self, mock_driver):
         """Test recording grammar error."""
         from italianollama.memory.neo4j_client import Neo4jClient
@@ -325,7 +325,7 @@ class TestNeo4jClientUnit:
         mock_session.run.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_get_exercise_history(self, mock_driver):
         """Test getting exercise history."""
         from italianollama.memory.neo4j_client import Neo4jClient
@@ -355,7 +355,7 @@ class TestNeo4jClientUnit:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_get_common_errors(self, mock_driver):
         """Test getting common errors."""
         from italianollama.memory.neo4j_client import Neo4jClient

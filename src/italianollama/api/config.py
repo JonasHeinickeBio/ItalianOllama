@@ -28,9 +28,10 @@ class Settings(BaseSettings):
     neo4j_database: str = "neo4j"
     """Neo4j database name"""
 
-    # ============ LiteLLM Configuration ============
+    # ============ LLM Configuration ============
+    # LiteLLM proxy (local, routes to Ollama or Blablador)
     litellm_base_url: str = "http://litellm:4000"
-    """LiteLLM server URL"""
+    """LiteLLM server URL (use for local Ollama proxy)"""
 
     litellm_api_key: str = "dummy"
     """LiteLLM API key"""
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
     litellm_timeout: int = 120
     """LiteLLM request timeout in seconds"""
 
-    # ============ Blablador Direct API (Alternative) ============
+    # Blablador direct API (alternative to LiteLLM)
     blablador_api_url: str | None = None
     """Blablador API URL (if using direct, not LiteLLM)"""
 
@@ -50,6 +51,16 @@ class Settings(BaseSettings):
 
     blablador_model: str = "alias-fast"
     """Blablador model name"""
+
+    # Priority: Use Blablador direct if URL is set and flag is True, otherwise use LiteLLM
+    use_blablador_direct: bool = False
+    """Whether to use Blablador API directly (bypassing LiteLLM)"""
+
+    # Auto-detect: If BLABLADOR_API_URL is set and LITELLM_MODE=direct, use Blablador
+    @property
+    def use_blablador(self) -> bool:
+        """Determine if Blablador direct API should be used."""
+        return bool(self.blablador_api_url and self.use_blablador_direct)
 
     # ============ Authentication & Security ============
     auth_secret: str = "dev-secret-key-do-not-use-in-production"
@@ -60,6 +71,17 @@ class Settings(BaseSettings):
 
     jwt_expiration_hours: int = 4
     """JWT token expiration time in hours"""
+
+    # ============ LLM Model Selection ============
+    @property
+    def llm_model(self) -> str:
+        """Get active LLM model name based on configuration."""
+        return self.blablador_model if self.use_blablador else self.litellm_model
+
+    @property
+    def llm_base_url(self) -> str:
+        """Get active LLM base URL based on configuration."""
+        return self.blablador_api_url if self.use_blablador else self.litellm_base_url
 
     # ============ CORS Configuration ============
     cors_origins: list[str] = [

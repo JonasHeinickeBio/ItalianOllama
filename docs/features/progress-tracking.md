@@ -270,6 +270,8 @@ PDF report includes:
 
 ## Related Documentation
 
+- [Flashcard Review](flashcard-review.md) - Flashcard system with spaced repetition
+- [Session Tracking](session-tracking.md) - Neo4j session tracking system
 - [Dashboard Features](dashboard.md)
 - [Chat Interface](chat-interface.md)
 - [Exercise Types](exercises.md)

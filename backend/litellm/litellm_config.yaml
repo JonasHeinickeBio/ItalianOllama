@@ -1,0 +1,30 @@
+# LiteLLM Configuration for ItalianOllama
+# Routes LLM requests to Blablador (cloud) with fallbacks
+
+model_list:
+  # Primary: Blablador (Helmholtz) - Current production model
+  - model_name: default
+    litellm_params:
+      model: openai/alias-fast
+      api_base: ${BLABLADOR_API_URL:-https://api.helmholtz-blablador.fz-juelich.de/v1/}
+      api_key: ${BLABLADOR_API_KEY}
+      rpm: 60
+      timeout: 120
+
+  # Fallback: Ollama (local) - For offline use
+  - model_name: ollama-local
+    litellm_params:
+      model: ollama/llama3.2:3b
+      api_base: http://ollama.host.docker.internal:11434
+      rpm: 1000
+      timeout: 180
+
+# Proxy settings
+settings:
+  drop_params: true
+  set_verbose: false
+  request_timeout: 120
+  telemetry: false
+  num_retries: 2
+  retry_after: 2
+  spend_logging: false

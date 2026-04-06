@@ -32,6 +32,13 @@ cp .env.example .env  # Add your API keys and Neo4j credentials
 ```
 
 ### 3. Run with Docker
+
+**Option A: Using CLI (Recommended)**
+```bash
+python cli.py docker up
+```
+
+**Option B: Direct Docker Compose**
 ```bash
 cd backend
 docker compose up -d
@@ -56,16 +63,52 @@ poetry run streamlit run src/italianollama/frontend/streamlit/app_enhanced.py --
 
 - **💬 Chat**: Real-time conversation with Sofia.
 - **📊 Progress**: KPI metrics and learning history.
-- **📚 Vocabulary**: Confidence heatmap of learned words with spaced repetition.
-- **✏️ Grammar**: Detailed error tracking with book-rule explanations.
+- **📚 Vocabulary**: Confidence heatmap with flashcard review and spaced repetition
+- **🃏 Flashcard System**: Interactive flashcard sessions with CEFR level filtering
+- **📝 Session Tracking**: Neo4j-based session tracking with accuracy and duration metrics
+- **✏️ Grammar**: Detailed error tracking with rule explanations.
 - **🕸️ Knowledge Graph**: Interactive view of your personal learning network.
 - **🎯 Test Readiness**: Skill radar charts for CEFR exam prep.
 - **📝 Placement Test**: Interactive CEFR A1-C1 assessment with Neo4j persistence.
 - **🎨 Professional Styling**: Custom CSS themes, card-based layouts, consistent theming.
 
+## Vocabulary Learning Features
+
+### Flashcard Review System
+
+The vocabulary learning module includes a comprehensive flashcard system:
+
+- **Interactive Flashcards**: View Italian words with English translations
+- **Confidence Assessment**: Rate your knowledge (Not at all / Somewhat / Confident)
+- **CEFR Level Filtering**: Focus on specific proficiency levels (A1, A2, B1, etc.)
+- **Progress Tracking**: Real-time statistics on review sessions
+- **Session History**: Track your learning progress over time
+
+### Neo4j Integration
+
+All vocabulary learning sessions are stored in the Neo4j knowledge graph:
+
+- **Session Nodes**: Store review sessions with metrics (accuracy, duration, words reviewed)
+- **Relationships**: Track Student → Session → Vocabulary connections
+- **Historical Data**: Analyze learning patterns and progress
+
+### Vocabulary Management
+
+- **Add New Words**: Manually add vocabulary with Italian word, translation, CEFR level, and topic
+- **Search & Filter**: Find words by Italian term or filter by CEFR level
+- **Confidence Tracking**: Visual progress bars show mastery level per word
+- **Topic Organization**: Group words by themes (food, travel, family, etc.)
+
+### Technical Implementation
+
+- **Streamlit Page**: `/src/italianollama/frontend/streamlit/pages/04_vocabulary.py`
+- **Backend API**: `/src/italianollama/frontend/streamlit/tutor_api.py`
+- **Neo4j Manager**: `/src/italianollama/memory/learning.py`
+- **PDF Extraction**: `/scripts/extract_pdf_vocabulary.py`
+
 ## Documentation
 
-For detailed technical specifications, architecture diagrams, and the development roadmap, see [DEVELOPMENT.md](./DEVELOPMENT.md).
+For detailed technical specifications, architecture diagrams, and the development roadmap, see [DEVELOPMENT.md](./DEVELOPMENT.md) or the [Documentation Site](./docs/).
 
 ## License
 MIT License - see [LICENSE](./LICENSE) file.

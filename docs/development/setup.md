@@ -279,3 +279,4 @@ poetry run pip install -e .
 - [Coding Standards](coding-standards.md)
 - [Testing Guide](testing.md)
 - [Debugging Guide](debugging.md)
+- [MCP Server Integration](mcp-integration.md)

@@ -108,10 +108,11 @@ with col1:
         """,
         unsafe_allow_html=True,
     )
+    total_xp = (profile.get("total_xp") if profile else None) or 0
     st.metric(
         "XP Totali",
-        profile.get("total_xp", 0) if profile else 0,
-        delta="+50 oggi" if profile and profile.get("total_xp", 0) > 0 else None,
+        total_xp,
+        delta="+50 oggi" if profile and total_xp > 0 else None,
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -125,7 +126,7 @@ with col2:
     )
     st.metric(
         "Streak",
-        f"{profile.get('current_streak', 0) if profile else 0} giorni",
+        f"{(profile.get('current_streak') if profile else None) or 0} giorni",
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -139,7 +140,7 @@ with col3:
     )
     st.metric(
         "Vocabolario",
-        profile.get("vocabulary_count", 0) if profile else 0,
+        (profile.get("vocabulary_count") if profile else None) or 0,
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -153,7 +154,7 @@ with col4:
     )
     st.metric(
         "Sessioni",
-        profile.get("session_count", 0) if profile else 0,
+        (profile.get("session_count") if profile else None) or 0,
     )
     st.markdown("</div>", unsafe_allow_html=True)
 

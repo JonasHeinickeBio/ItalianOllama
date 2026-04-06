@@ -10,9 +10,9 @@ import psutil
 
 def get_services():
     """Return the services configuration, allowing for port overrides."""
-    api_port = int(os.getenv("API_PORT", 8000))
-    chainlit_port = int(os.getenv("CHAINLIT_PORT", 8501))
-    streamlit_port = int(os.getenv("STREAMLIT_PORT", 8502))
+    api_port = int(os.getenv("API_PORT", 8080))
+    chainlit_port = int(os.getenv("CHAINLIT_PORT", 8511))
+    streamlit_port = int(os.getenv("STREAMLIT_PORT", 8512))
 
     return {
         "api": {

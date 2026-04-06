@@ -130,8 +130,32 @@ cd frontend/streamlit
 python -m streamlit run app.py
 ```
 
+## Quick Start with CLI
+
+The project includes a comprehensive Docker Compose CLI for managing services:
+
+```bash
+# Check Docker installation
+python cli.py docker helpers check
+
+# Validate configuration
+python cli.py docker helpers validate --profile local
+
+# Start all services
+python cli.py docker up
+
+# Check status
+python cli.py docker status
+
+# View logs
+python cli.py docker logs fastapi --tail 100
+```
+
+For full CLI documentation, see the [CLI README](../../docs/cli/README.md).
+
 ## Next Steps
 
 - [Configuration Guide](configuration.md) - Customize your setup
 - [Quick Start](quick-start.md) - Begin using the tutor
 - [Architecture Overview](../architecture/overview.md) - Understand the system
+- [CLI Documentation](../cli/README.md) - Docker Compose CLI commands
