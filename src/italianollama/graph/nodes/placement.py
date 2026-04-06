@@ -3,7 +3,10 @@
 Determines student's CEFR level (A1-C2) through adaptive questions.
 """
 
+import logging
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from italianollama.graph.nodes.base import LLMClient
 from italianollama.graph.state import CEFR_LEVELS, TutorState
@@ -44,13 +47,15 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
         state["response"] = (
             f"Il tuo livello attuale è {existing_level}. Vuoi fare un nuovo test di placement?"
         )
-        state["should_continue"] = True
+        state["should_continue"] = False
         return state
 
     # Run placement test
     try:
         # For new students, generate placement questions
+        # For returning students who answered questions, determine level
         if len(messages) <= 1:
+            # Generate initial placement questions
             response = await llm.chat(
                 messages=messages,
                 system_prompt=PLACEMENT_PROMPT,
@@ -61,6 +66,7 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
                 {"role": "assistant", "content": response}
             ]
             state["response"] = response
+            state["should_continue"] = False
         else:
             # Student answered questions, determine level
             try:
@@ -78,8 +84,12 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
                 # Validate level is a valid CEFR level
                 if level not in CEFR_LEVELS:
                     level = "A1"
+                logger.info(f"PLACEMENT DEBUG: Setting current_level={level}")
                 state["current_level"] = level
                 state["level_confidence"] = level_data.get("confidence", 0.5)
+                logger.info(
+                    f"PLACEMENT DEBUG: After setting, current_level={state['current_level']}"
+                )
 
                 # Store in Neo4j
                 await neo4j_client.set_student_level(
@@ -91,6 +101,7 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
                 state["response"] = (
                     f"Ho determinato che il tuo livello è {state['current_level']}. {level_data.get('reasoning', '')}"
                 )
+                state["should_continue"] = False
             except Exception:
                 # Fallback to text response
                 response = await llm.chat(messages=messages, system_prompt=PLACEMENT_PROMPT)
@@ -98,9 +109,20 @@ async def placement_node(state: TutorState, neo4j_client: "Neo4jClient") -> Tuto
                 state["messages"] = state.get("messages", []) + [
                     {"role": "assistant", "content": response}
                 ]
+                state["should_continue"] = False
+
+                # Set default level if JSON parsing failed
+                state["current_level"] = "A1"
+                state["level_confidence"] = 0.5
 
     except Exception as e:
         state["response"] = f"Mi dispiace, ho avuto un problema con il test di placement: {str(e)}"
+        state["should_continue"] = False
+        # Set default level if placement failed
+        state["current_level"] = "A1"
+        state["level_confidence"] = 0.5
 
-    state["should_continue"] = True
+    logger.info(
+        f"PLACEMENT DEBUG: Final should_continue={state.get('should_continue', 'NOT SET')}, current_level={state.get('current_level')}"
+    )
     return state
