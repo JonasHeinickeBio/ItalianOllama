@@ -185,3 +185,5 @@ logs/
 !config/
 reports/model_availability_report_*.txt
 .env.aura
+
+*pyc
