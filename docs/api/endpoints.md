@@ -21,6 +21,11 @@ Production:  https://your-domain.com/api
 | `/students/{id}` | GET | Get student |
 | `/students/{id}/progress` | GET | Get progress |
 | `/students/{id}/vocabulary` | GET | Get vocabulary |
+| `/vocabulary` | POST | Add vocabulary |
+| `/vocabulary/{id}/confidence` | POST | Update confidence |
+| `/session/{student_id}` | POST | Create session |
+| `/session/{session_id}` | PUT | Update session |
+| `/session/history/{student_id}` | GET | Get session history |
 | `/students/{id}/grammar` | GET | Get grammar errors |
 
 ## Authentication

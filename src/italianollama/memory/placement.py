@@ -72,6 +72,7 @@ class PlacementTestManager(Neo4jBaseClient):
             f"determined_level={determined_level}"
         )
         query = """
+        MATCH (s:Student {student_id: $student_id})
         CREATE (r:TestResult {
             student_id: $student_id,
             total_correct: $total_correct,
@@ -81,6 +82,7 @@ class PlacementTestManager(Neo4jBaseClient):
             determined_level: $determined_level,
             completed_at: datetime()
         })
+        MERGE (s)-[:HAS_TEST_RESULT]->(r)
         RETURN elementId(r) AS id
         """
 

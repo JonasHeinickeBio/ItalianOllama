@@ -112,7 +112,7 @@ class TestNeo4jClientMoreCoverage:
     """Additional Neo4j client tests."""
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_close(self, mock_driver):
         """Test closing client."""
         from italianollama.memory.neo4j_client import Neo4jClient
@@ -133,7 +133,7 @@ class TestNeo4jClientMoreCoverage:
         mock_driver_instance.close.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("italianollama.memory.neo4j_client.AsyncGraphDatabase.driver")
+    @patch("italianollama.memory.base.AsyncGraphDatabase.driver")
     async def test_record_niveau_test(self, mock_driver):
         """Test recording niveau test."""
         from italianollama.memory.neo4j_client import Neo4jClient

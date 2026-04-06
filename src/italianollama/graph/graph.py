@@ -30,9 +30,12 @@ Phases:
     Phase 4: Niveau test (exam preparation)
 """
 
+import logging
 from typing import TYPE_CHECKING
 
 from langgraph.graph import StateGraph
+
+logger = logging.getLogger(__name__)
 
 from italianollama.graph.nodes import (
     free_writing_node,
@@ -64,6 +67,14 @@ async def router_node(state: TutorState) -> TutorState:
     This is the entry point that analyzes the conversation and decides
     which exercise type to invoke next.
     """
+    should_cont = state.get("should_continue", True)
+    logger.info(f"ROUTER DEBUG: should_continue={should_cont}, state keys={list(state.keys())}")
+    if not should_cont:
+        logger.info("ROUTER DEBUG: should_continue is False, setting router_decision to __end__")
+        state["router_decision"] = "__end__"
+        return state
+    logger.info(f"ROUTER DEBUG: Defaulting to chat route")
+
     messages = state.get("messages", [])
     current_level = state.get("current_level")
     exercise_type = state.get("exercise_type")
@@ -96,6 +107,15 @@ async def router_node(state: TutorState) -> TutorState:
         route = "chat"
 
     state["router_decision"] = route
+    
+    logger.info(f"ROUTER DEBUG: Set router_decision={route}")
+    
+    should_cont = state.get("should_continue", True)
+    if not should_cont:
+        logger.info("ROUTER DEBUG (second check): should_continue is False, forcing router_decision to __end__")
+        state["router_decision"] = "__end__"
+    
+    logger.info(f"ROUTER DEBUG: Final router_decision={state['router_decision']}")
     return state
 
 
@@ -116,7 +136,9 @@ async def chat_node(state: TutorState, neo4j_client: "Neo4jClient") -> TutorStat
         state["response"] = f"Ciao! {str(e)}"
 
     # Default: stop after one response, user needs to explicitly request to continue
+    logger.info(f"CHAT DEBUG: Setting should_continue=False (was: {state.get('should_continue', 'NOT SET')})")
     state["should_continue"] = False
+    logger.info(f"CHAT DEBUG: After setting, should_continue={state['should_continue']}")
     return state
 
 
@@ -147,13 +169,7 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
     # ============ Add Nodes ============
 
     # Router - entry point with stop condition
-    async def router_wrapper(state: TutorState):
-        result = await router_node(state)
-        if result.get("should_continue") is False:
-            result["router_decision"] = "__end__"
-        return result
-
-    workflow.add_node("router", router_wrapper)
+    workflow.add_node("router", router_node)
 
     # Chat (default free conversation)
     async def chat_wrapper(state: TutorState):
@@ -211,6 +227,7 @@ def create_tutor_graph(neo4j_client: "Neo4jClient", checkpoint_db=None):
             "free_writing": "free_writing",
             "niveau_test": "niveau_test",
             "chat": "chat",
+            "__end__": "__end__",
         },
     )
 

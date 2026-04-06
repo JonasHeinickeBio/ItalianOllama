@@ -488,3 +488,67 @@ class TutorAPIClient:
         else:
             logger.error("❌ Failed to send chat message")
         return result
+
+    # ============ Session Tracking (Neo4j) ============
+
+    def create_session(
+        self,
+        student_id: str,
+        session_type: str,
+        details: dict | None = None,
+    ) -> dict | None:
+        """Create a new learning session in Neo4j."""
+        logger.info(f"📝 Creating session - type={session_type}")
+        result = self._request(
+            "POST",
+            f"/session/{student_id}",
+            json_data={
+                "session_type": session_type,
+                "details": details or {},
+            },
+        )
+        if result:
+            logger.info(f"✓ Session created: {result.get('session_id')}")
+        else:
+            logger.error("❌ Failed to create session")
+        return result
+
+    def update_session(
+        self,
+        session_id: str,
+        words_reviewed: int = 0,
+        correct_answers: int = 0,
+        accuracy: float = 0.0,
+        duration_seconds: int = 0,
+    ) -> dict | None:
+        """Update session with completion metrics."""
+        logger.info(f"📊 Updating session - session_id={session_id}")
+        result = self._request(
+            "PUT",
+            f"/session/{session_id}",
+            json_data={
+                "words_reviewed": words_reviewed,
+                "correct_answers": correct_answers,
+                "accuracy": accuracy,
+                "duration_seconds": duration_seconds,
+            },
+        )
+        if result:
+            logger.info("✓ Session updated successfully")
+        else:
+            logger.error("❌ Failed to update session")
+        return result
+
+    def get_session_history(self, student_id: str, limit: int = 10) -> list | None:
+        """Get session history for a student."""
+        logger.debug(f"📅 Fetching session history - student_id={student_id}")
+        result = self._request(
+            "GET",
+            f"/session/history/{student_id}",
+            params={"limit": limit},
+        )
+        if result:
+            logger.info(f"✓ Session history retrieved - {len(result.get('sessions', []))} entries")
+        else:
+            logger.warning("⚠️ Failed to retrieve session history")
+        return result.get("sessions") if result else None

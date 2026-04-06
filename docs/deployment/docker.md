@@ -290,29 +290,33 @@ LITELLM_BASE_URL=http://litellm:4000
 ### Start Services
 
 ```bash
-# Start all services
+# Using Docker CLI
 docker compose up -d
 
-# Start with logs
-docker compose up -d && docker compose logs -f
+# Using Docker Compose CLI
+python cli.py docker up
 ```
 
 ### Stop Services
 
 ```bash
-# Stop all
+# Using Docker CLI
 docker compose down
 
-# Stop and remove volumes
-docker compose down -v
+# Using Docker Compose CLI
+python cli.py docker down
 ```
 
 ### Rebuild
 
 ```bash
-# Rebuild after code changes
+# Using Docker CLI
 docker compose build
 docker compose up -d
+
+# Using Docker Compose CLI
+python cli.py docker helpers rebuild
+python cli.py docker up
 ```
 
 ### Debug
@@ -326,6 +330,11 @@ docker compose logs -f api
 
 # Check running containers
 docker compose ps
+
+# Using Docker Compose CLI equivalents
+python cli.py docker logs fastapi --follow
+python cli.py docker status
+python cli.py docker helpers check
 ```
 
 ## Multi-Stage Builds
@@ -347,8 +356,36 @@ USER appuser
 CMD ["python", "-m", "src.italianollama.api"]
 ```
 
+## Docker Compose CLI
+
+The project includes a comprehensive CLI for managing Docker Compose services:
+
+```bash
+# View all Docker commands
+python cli.py docker --help
+
+# Start services with specific profile
+python cli.py docker up --profile cloud
+
+# Check status
+python cli.py docker status
+
+# View logs
+python cli.py docker logs fastapi --tail 100
+
+# System diagnostics
+python cli.py docker helpers check
+python cli.py docker helpers validate --profile local
+
+# Cleanup
+python cli.py docker helpers prune
+```
+
+For complete CLI documentation, see [CLI README](../cli/README.md).
+
 ## Related Documentation
 
 - [Production Deployment](production.md)
 - [Nginx Configuration](nginx.md)
 - [Troubleshooting](../troubleshooting/common-issues.md)
+- [CLI Documentation](../cli/README.md)

@@ -271,6 +271,8 @@ Available exports:
 
 ## Related Documentation
 
+- [Flashcard Review](flashcard-review.md) - Flashcard system with spaced repetition
+- [Session Tracking](session-tracking.md) - Neo4j session tracking system
+- [Progress Tracking](progress-tracking.md)
 - [Chat Interface](chat-interface.md)
 - [Exercise Types](exercises.md)
-- [Progress Tracking](progress-tracking.md)

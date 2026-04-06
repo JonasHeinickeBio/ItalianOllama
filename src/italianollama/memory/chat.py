@@ -123,7 +123,9 @@ class ChatManager(Neo4jBaseClient):
         try:
             async with self._driver.session() as session:
                 result = await session.run(query, params)
-                records = await result.all()
+                records = []
+                async for record in result:
+                    records.append(record)
                 return [dict(record[0]) for record in records]
         except Exception as e:
             logger.error("Failed to retrieve chat history for %s: %s", student_id, e)

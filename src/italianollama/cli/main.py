@@ -5,6 +5,9 @@ import os
 
 import click
 
+from italianollama.cli.compose import docker
+from italianollama.cli.benchmark import benchmark
+
 
 @click.group()
 @click.version_option(version="0.1.0")
@@ -119,6 +122,81 @@ def config_show():
         if "PASSWORD" in var or "KEY" in var:
             value = "***" if value else "(not set)"
         click.echo(f"  {var}: {value}")
+
+
+@cli.group()
+def openrouter():
+    """Manage OpenRouter models (free model discovery)."""
+    pass
+
+
+@openrouter.command("list")
+def openrouter_list():
+    """List available free models from OpenRouter."""
+    import asyncio
+
+    async def list_free_models():
+        from italianollama.utils.openrouter import discover_free_models
+
+        models = await discover_free_models()
+
+        if not models:
+            click.secho("No free models found on OpenRouter", fg="yellow")
+            return
+
+        click.echo(f"\nFound {len(models)} free models:\n")
+        for model in models:
+            model_id = model.get("id", "unknown")
+            name = model.get("name", "Unknown")
+            pricing = model.get("pricing", {})
+            prompt_price = pricing.get("prompt", "N/A")
+            completion_price = pricing.get("completion", "N/A")
+
+            click.echo(
+                f"  • {name} ({model_id})"
+            )
+            click.echo(f"    Prompt: {prompt_price}, Completion: {completion_price}")
+
+        click.echo(
+            f"\nTo add these models to LiteLLM config, run: italianollama openrouter add"
+        )
+
+    asyncio.run(list_free_models())
+
+
+@openrouter.command("add")
+def openrouter_add():
+    """Add free models from OpenRouter to LiteLLM config."""
+    import asyncio
+
+    async def add_models():
+        from italianollama.utils.openrouter import add_free_models_to_config
+
+        click.echo("Discovering free models from OpenRouter...")
+        
+        try:
+            added = await add_free_models_to_config()
+
+            if added:
+                click.secho(
+                    f"✓ Added {len(added)} free models to LiteLLM config:", fg="green"
+                )
+                for model_name in added:
+                    click.echo(f"  - {model_name}")
+                click.echo(
+                    "\nStart LiteLLM proxy: litellm --config backend/litellm/litellm_config.yaml"
+                )
+            else:
+                click.secho("No new free models to add", fg="yellow")
+                click.echo("Models may already exist in config or no free models available")
+
+        except ValueError as e:
+            click.secho(f"✗ Error: {e}", fg="red")
+            click.echo(
+                "Make sure OPENROUTER_API_KEY is set in your environment"
+            )
+
+    asyncio.run(add_models())
 
 
 @cli.group()
@@ -373,6 +451,10 @@ def service_logs(name, lines, follow):
         subprocess.run(cmd)
     except KeyboardInterrupt:
         pass
+
+
+cli.add_command(docker)
+cli.add_command(benchmark)
 
 
 if __name__ == "__main__":
