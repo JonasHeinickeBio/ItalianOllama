@@ -1,21 +1,17 @@
-# Italian Tutor - Docker Compose (Production-Ready, Secure)
+# Italian Tutor - Docker Compose
 #
-# Enterprise-grade setup with:
-#   ✓ Secrets management for sensitive data
-#   ✓ Resource limits and container security
-#   ✓ Health checks and service dependencies
-#   ✓ Logging configuration
-#   ✓ Network isolation
-#   ✓ Specific container versions (no 'latest')
+# Two modes supported:
+#   1. Local mode (default): Ollama + LiteLLM + Neo4j (offline-capable)
+#   2. Cloud mode: Blablador API + Neo4j (uses external LLM)
 #
-# Quick Start:
-#   1. Create secrets: bash scripts/generate_secrets.sh
-#   2. docker compose up -d
-#   3. Access: http://localhost:8501 (Chainlit) or http://localhost:8000/docs (API)
+# Quick Start - Local (Offline):
+#   cd backend && docker compose up -d
+#   http://localhost:8501 (Chainlit)
 #
-# Profiles:
-#   docker compose --profile neo4j up -d      # Include local Neo4j
-#   docker compose up -d                      # Default (cloud Neo4j only)
+# Quick Start - Cloud (Blablador):
+#   Set USE_AURA=false, BLABLADOR_API_URL in .env
+#   docker compose up -d
+#   http://localhost:8501 (Chainlit)
 
 services:
   # ============================================
@@ -26,45 +22,34 @@ services:
       context: ..
       dockerfile: backend/Dockerfile
     container_name: italian-tutor-api
-
-    # Security: Run as non-root user
     user: "1000:1000"
-
     environment:
-      # Core Configuration
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-
-      # Neo4j
+      # Neo4j (local or Aura via USE_AURA flag)
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
       - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-admin}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      # LLM Mode Selection
+      # - Local: LiteLLM routes to Ollama
+      # - Cloud: Blablador direct API (set BLABLADOR_API_URL in .env)
+      - LITELLM_BASE_URL=http://host.docker.internal:4000
+      - LITELLM_MODEL=${LITELLM_MODEL:-tutor}
+      - BLABLADOR_API_URL=${BLABLADOR_API_URL:-}
+      - BLABLADOR_API_KEY=${BLABLADOR_API_KEY:-}
+      - BLABLADOR_MODEL=${BLABLADOR_MODEL:-alias-fast}
       - USE_AURA=${USE_AURA:-false}
-
-      # LiteLLM Router
-      - LITELLM_BASE_URL=http://litellm:4000
-      - LITELLM_MODEL=${LITELLM_MODEL:-gpt-4}
-
+      - USE_BLABLADOR_DIRECT=${USE_BLABLADOR_DIRECT:-false}
     env_file:
       - ../.env
-
-    # Secrets for sensitive data
-    secrets:
-      - neo4j_password
-      - auth_secret_key
-      - litellm_api_key
-
     ports:
       - "${API_PORT:-8000}:8000"
-
     depends_on:
-      litellm:
-        condition: service_started
-
+      neo4j:
+        condition: service_healthy
     restart: on-failure:3
-
-    # Resource Limits & Reservations
     deploy:
       resources:
         limits:
@@ -73,19 +58,14 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
-
-    # Health Check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       start_period: 40s
       retries: 3
-
     networks:
       - italian-tutor-network
-
-    # Centralized Logging
     logging:
       driver: "json-file"
       options:
@@ -94,60 +74,41 @@ services:
         labels: "service=fastapi"
 
   # ============================================
-  # LiteLLM - LLM Router & Load Balancer
+  # LiteLLM - LLM Proxy (Routes to Blablador or Ollama)
   # ============================================
   litellm:
     image: litellm/litellm:v1.82.3-stable.patch.2
     container_name: italian-tutor-litellm
-
     user: "1000:1000"
-
     volumes:
-      - ./litellm/litellm_config.yaml:/app/config.yaml:ro
-      - litellm-db:/data
-
+      - ./litellm:/app/litellm:ro
     ports:
       - "${LITELLM_PORT:-4000}:4000"
-
+    command: ["--config", "/app/litellm/litellm_config.yaml", "--host", "0.0.0.0", "--port", "4000", "--drop_params"]
     environment:
-      - LITELLM_CONFIG_FILE=/app/config.yaml
-      - DATABASE_URL=sqlite:////data/litellm.db
       - LITELLM_LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - LITELLM_DISABLE_PRISMA=True
-      - PYTHONUNBUFFERED=1
-      - PYTHONDONTWRITEBYTECODE=1
-
-    env_file:
-      - ../.env
-
-    secrets:
-      - litellm_api_key
-      - litellm_salt_key
-
+      - LITELLM_API_KEY=${LITELLM_API_KEY:-sk-1234}
+      - LITELLM_DISABLE_TELEMETRY=True
+      - SPEND_LOGGING=False
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
     restart: on-failure:3
-
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
           cpus: '1'
           memory: 1G
-
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health", "||" , "exit", "0"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:4000/health\")'"]
       interval: 30s
       timeout: 10s
       start_period: 60s
-      retries: 10
-
+      retries: 5
     networks:
       - italian-tutor-network
-
     logging:
       driver: "json-file"
       options:
@@ -156,33 +117,28 @@ services:
         labels: "service=litellm"
 
   # ============================================
-  # Neo4j - Graph Database (Optional, Local)
+  # Neo4j - Graph Database
   # ============================================
+  # Local mode (default): neo4j container
+  # Cloud mode (USE_AURA=true): Use Neo4j Aura instead of this container
   neo4j:
     image: neo4j:latest
     container_name: italian-tutor-neo4j
-    profiles: ["neo4j"]
-
     environment:
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-admin}
       - NEO4J_dbms_memory_heap_max__size=1G
       - NEO4J_dbms_memory_pagecache_size=512M
       - NEO4JLABS_PLUGINS=["apoc"]
       - NEO4J_server_logs_debug_enabled=false
-
+      - NEO4J_server_bolt_listen__address=0.0.0.0:7687
+      - NEO4J_server_http_listen__address=0.0.0.0:7474
     volumes:
       - neo4j-data:/data
       - neo4j-logs:/logs
-
     ports:
-      - "${NEO4J_BOLT_PORT:-7687}:7687"
-      - "${NEO4J_HTTP_PORT:-7474}:7474"
-
-    secrets:
-      - neo4j_password
-
+      - "7688:7687"
+      - "7475:7474"
     restart: on-failure:3
-
     deploy:
       resources:
         limits:
@@ -191,17 +147,14 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
-
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || nc -z localhost 7474"]
       interval: 30s
       timeout: 10s
-      start_period: 40s
-      retries: 3
-
+      start_period: 60s
+      retries: 5
     networks:
       - italian-tutor-network
-
     logging:
       driver: "json-file"
       options:
@@ -217,9 +170,7 @@ services:
       context: ..
       dockerfile: src/italianollama/frontend/Dockerfile
     container_name: italian-tutor-chainlit
-
     user: "1000:1000"
-
     environment:
       # Backend API Configuration (matches italianollama.frontend.config)
       - BACKEND_URL=http://fastapi:8000
@@ -227,26 +178,24 @@ services:
       - DEFAULT_STUDENT_ID=demo
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-
       # Chainlit Configuration
       - CHAINLIT_HOST=0.0.0.0
       - CHAINLIT_PORT=8501
-
       # Logging
       - LOG_LEVEL=INFO
-
+      # Neo4j credentials (for direct access if needed)
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-admin}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
     env_file:
       - ../.env
-
     ports:
       - "${CHAINLIT_PORT:-8501}:8501"
-
     depends_on:
       fastapi:
         condition: service_healthy
-
     restart: on-failure:3
-
     deploy:
       resources:
         limits:
@@ -255,17 +204,14 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501"]
       interval: 30s
       timeout: 10s
       start_period: 30s
       retries: 3
-
     networks:
       - italian-tutor-network
-
     logging:
       driver: "json-file"
       options:
@@ -281,7 +227,7 @@ volumes:
     driver: local
   neo4j-logs:
     driver: local
-  litellm-db:
+  ollama-data:
     driver: local
 
 # ============================================
@@ -296,24 +242,47 @@ networks:
         - subnet: 172.20.0.0/16
 
 # ============================================
+# Quick Start Commands
+# ============================================
+# Local mode (all services including Ollama):
+#   cd backend && docker compose --profile local up -d
+#
+# Cloud mode (Neo4j local + Blablador API):
+#   cd backend && docker compose --profile cloud up -d
+#
+# Blablador direct (no LiteLLM):
+#   cd backend && docker compose --profile blablador-only up -d
+#
+# All services (no profiles):
+#   cd backend && docker compose up -d
+
+# ============================================
 # Secrets - Sensitive Data Management
 # ============================================
-# Docker Secrets for production deployment
-# Local development: Create files in ../secrets/
+# The .env file contains sensitive credentials:
+#   - NEO4J_PASSWORD: Database password
+#   - BLABLADOR_API_KEY: LLM API key (Blablador)
+#   - LITELLM_API_KEY: LiteLLM master key (default: sk-1234)
+# 
+# .env is already in .gitignore for safety.
+# For production, consider using Docker secrets or external secret management.
 #
-# Required secret files:
-#   - ../secrets/neo4j_password.txt
-#   - ../secrets/auth_secret_key.txt
-#   - ../secrets/litellm_api_key.txt
-#   - ../secrets/litellm_salt_key.txt
-#   - ../secrets/webui_secret_key.txt
+# Example .env for different modes:
 #
-secrets:
-  neo4j_password:
-    file: ../secrets/neo4j_password.txt
-  auth_secret_key:
-    file: ../secrets/auth_secret_key.txt
-  litellm_api_key:
-    file: ../secrets/litellm_api_key.txt
-  litellm_salt_key:
-    file: ../secrets/litellm_salt_key.txt
+# LOCAL MODE (Ollama + Neo4j + LiteLLM):
+#   NEO4J_URI=bolt://127.0.0.1:7687
+#   BLABLADOR_API_URL=
+#   USE_AURA=false
+#
+# CLOUD MODE (Blablador + Neo4j):
+#   NEO4J_URI=bolt://127.0.0.1:7687
+#   BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
+#   BLABLADOR_API_KEY=your-key-here
+#   USE_AURA=false
+#
+# AURA MODE (Neo4j Aura + Blablador):
+#   NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
+#   NEO4J_PASSWORD=your-aura-password
+#   BLABLADOR_API_URL=https://api.helmholtz-blablador.fz-juelich.de/v1/
+#   BLABLADOR_API_KEY=your-key-here
+#   USE_AURA=true
